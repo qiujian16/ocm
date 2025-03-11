@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/utils"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,8 +14,6 @@ import (
 	"k8s.io/klog/v2"
 
 	workv1 "open-cluster-management.io/api/work/v1"
-
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 )
 
 // ListLocalWorksFunc loads the works from the local environment.

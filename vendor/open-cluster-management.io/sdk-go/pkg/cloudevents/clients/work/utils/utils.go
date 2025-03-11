@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/common"
 
 	"github.com/bwmarrin/snowflake"
 	jsonpatch "github.com/evanphx/json-patch"
@@ -22,7 +23,6 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/apis/work/v1/validator"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
 )
 
 // Patch applies the patch to a work with the patch type.

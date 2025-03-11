@@ -3,6 +3,8 @@ package codec
 import (
 	"encoding/json"
 	"fmt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"strconv"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -13,8 +15,6 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 )
 
 // ExtensionWorkMeta is an extension attribute for work meta data.

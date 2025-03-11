@@ -24,7 +24,7 @@ func NewPublishError(qualifiedResource schema.GroupResource, name string, err er
 				Name:   name,
 				Causes: []metav1.StatusCause{{Message: err.Error()}},
 			},
-			Message: fmt.Sprintf("Failed to publish work %s: %v", name, err),
+			Message: fmt.Sprintf("Failed to publish object (%s/%s): %v", qualifiedResource.String(), name, err),
 		},
 	}
 }

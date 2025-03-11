@@ -2,6 +2,9 @@ package codec
 
 import (
 	"fmt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/statushash"
 	"strconv"
 
 	"github.com/bwmarrin/snowflake"
@@ -14,9 +17,6 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/apis/work/v1/validator"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/statushash"
 )
 
 var sequenceGenerator *snowflake.Node

@@ -1,18 +1,15 @@
 package lister
 
 import (
-	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 
 	workv1 "open-cluster-management.io/api/work/v1"
-
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
-// WatcherStoreLister list the ManifestWorks from WorkClientWatcherStore
+// WatcherStoreLister list the ManifestWorks from the WorkClientWatcherStore.
 type WatcherStoreLister struct {
 	store store.WorkClientWatcherStore
 }
@@ -23,26 +20,21 @@ func NewWatcherStoreLister(store store.WorkClientWatcherStore) *WatcherStoreList
 	}
 }
 
-// List returns the ManifestWorks from a WorkClientWatcherStore with list options
+// List returns the ManifestWorks from the WorkClientWatcherCache with list options.
 func (l *WatcherStoreLister) List(options types.ListOptions) ([]*workv1.ManifestWork, error) {
-	opts := metav1.ListOptions{}
-
-	if options.Source != types.SourceAll {
-		opts.LabelSelector = fmt.Sprintf("%s=%s", common.CloudEventsOriginalSourceLabelKey, options.Source)
-	}
-
-	list, err := l.store.List(options.ClusterName, opts)
+	list, err := l.store.List(options.ClusterName, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	works := []*workv1.ManifestWork{}
 	for _, work := range list.Items {
-		cloudEventsDataType := work.Annotations[common.CloudEventsDataTypeAnnotationKey]
-		if cloudEventsDataType != options.CloudEventsDataType.String() {
+		// Currently, the source client only support the ManifestBundle
+		// TODO: when supporting multiple cloud events data types, need a way
+		// to known the work event data type
+		if options.CloudEventsDataType != payload.ManifestBundleEventDataType {
 			continue
 		}
-
 		works = append(works, &work)
 	}
 

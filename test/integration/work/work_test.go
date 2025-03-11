@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	workapiv1 "open-cluster-management.io/api/work/v1"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 
 	commonoptions "open-cluster-management.io/ocm/pkg/common/options"
 	"open-cluster-management.io/ocm/pkg/work/spoke"

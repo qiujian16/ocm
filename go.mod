@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/eks v1.57.1
 	github.com/aws/aws-sdk-go-v2/service/iam v1.38.6
 	github.com/aws/smithy-go v1.22.2
+	github.com/cloudevents/sdk-go/v2 v2.15.3-0.20240911135016-682f3a9684e4
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/ghodss/yaml v1.0.0
@@ -44,7 +45,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-replace open-cluster-management.io/sdk-go => github.com/qiujian16/sdk-go v0.0.0-20250306072939-17de68af9723
+replace open-cluster-management.io/sdk-go => github.com/qiujian16/sdk-go v0.0.0-20250317081704-39994a0abb9e
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
@@ -74,7 +75,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.0.0-20240413090539-7fef29478991 // indirect
 	github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2 v2.0.0-20241008145627-6bcc075b5b6c // indirect
-	github.com/cloudevents/sdk-go/v2 v2.15.3-0.20240911135016-682f3a9684e4 // indirect
 	github.com/confluentinc/confluent-kafka-go/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect

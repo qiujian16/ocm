@@ -14,10 +14,10 @@ import (
 	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workv1informer "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workapplier "open-cluster-management.io/sdk-go/pkg/apis/work/v1/applier"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/source/codec"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 
 	"open-cluster-management.io/ocm/pkg/work/hub/controllers/manifestworkreplicasetcontroller"
 )
@@ -99,7 +99,7 @@ func (c *WorkHubManagerConfig) RunWorkHubManager(ctx context.Context, controller
 		clientHolder, err := work.NewClientHolderBuilder(config).
 			WithClientID(c.workOptions.CloudEventsClientID).
 			WithSourceID(sourceID).
-			WithCodecs(codec.NewManifestBundleCodec()).
+			WithCodec(codec.NewManifestBundleCodec()).
 			WithWorkClientWatcherStore(watcherStore).
 			NewSourceClientHolder(ctx)
 		if err != nil {

@@ -2,6 +2,8 @@ package store
 
 import (
 	"fmt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/utils"
 	"strconv"
 	"sync"
 	"time"
@@ -19,8 +21,6 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 )
 
 const ManifestWorkFinalizer = "cloudevents.open-cluster-management.io/manifest-work-cleanup"

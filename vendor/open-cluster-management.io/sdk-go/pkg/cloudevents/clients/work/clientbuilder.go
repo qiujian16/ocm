@@ -3,6 +3,13 @@ package work
 import (
 	"context"
 	"fmt"
+	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/client"
+	agentlister "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/lister"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/internal"
+	sourceclient "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/source/client"
+	sourcelister "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/source/lister"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/statushash"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 
 	"k8s.io/klog/v2"
 
@@ -12,13 +19,6 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/client"
-	agentlister "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/lister"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/internal"
-	sourceclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/client"
-	sourcelister "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/lister"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/statushash"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
 // ClientHolder holds a manifestwork client that implements the ManifestWorkInterface based on different configuration

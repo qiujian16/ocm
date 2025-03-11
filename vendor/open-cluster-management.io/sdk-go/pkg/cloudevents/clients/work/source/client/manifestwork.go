@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	workerrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/utils"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,11 +22,6 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	workerrors "open-cluster-management.io/sdk-go/pkg/cloudevents/work/errors"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 )
 
 // ManifestWorkSourceClient implements the ManifestWorkInterface.
