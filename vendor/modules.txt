@@ -1777,6 +1777,8 @@ open-cluster-management.io/api/operator/v1
 open-cluster-management.io/api/utils/work/v1/workapplier
 open-cluster-management.io/api/work/v1
 open-cluster-management.io/api/work/v1alpha1
+# open-cluster-management.io/clusteradm v0.10.1
+## explicit; go 1.22.6
 # open-cluster-management.io/sdk-go v0.15.1-0.20241125015855-1536c3970f8f => github.com/qiujian16/sdk-go v0.0.0-20250317081704-39994a0abb9e
 ## explicit; go 1.22.0
 open-cluster-management.io/sdk-go/pkg/apis/cluster/v1alpha1
@@ -1788,6 +1790,9 @@ open-cluster-management.io/sdk-go/pkg/apis/work/v1/validator
 open-cluster-management.io/sdk-go/pkg/basecontroller/events
 open-cluster-management.io/sdk-go/pkg/basecontroller/factory
 open-cluster-management.io/sdk-go/pkg/certrotation
+open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster
+open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster/store
+open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/client
@@ -1814,6 +1819,7 @@ open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt
 open-cluster-management.io/sdk-go/pkg/cloudevents/generic/payload
 open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types
 open-cluster-management.io/sdk-go/pkg/cloudevents/server
+open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc
 open-cluster-management.io/sdk-go/pkg/helpers
 open-cluster-management.io/sdk-go/pkg/patcher
 # sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3

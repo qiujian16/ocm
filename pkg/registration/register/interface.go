@@ -31,9 +31,9 @@ type SecretOption struct {
 	// it does not exist.
 	SecretName string
 
-	// BootStrapKubeConfig is the kubeconfig to generate hubkubeconfig, if set, create kubeconfig value
+	// BootStrapKubeConfigFile is the kubeconfig to generate hubkubeconfig, if set, create kubeconfig value
 	// in the secret.
-	BootStrapKubeConfig *clientcmdapi.Config
+	BootStrapKubeConfigFile string
 
 	// ClusterName is the cluster name, and it is set as a secret value if it is set.
 	ClusterName string

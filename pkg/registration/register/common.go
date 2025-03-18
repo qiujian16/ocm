@@ -118,8 +118,13 @@ func IsHubKubeConfigValidFunc(driver RegisterDriver, secretOption SecretOption) 
 			return false, err
 		}
 
-		if secretOption.BootStrapKubeConfig != nil {
-			if valid, err := IsHubKubeconfigValid(secretOption.BootStrapKubeConfig, hubKubeconfig); !valid || err != nil {
+		if secretOption.BootStrapKubeConfigFile != "" {
+			kubeconfig, err := clientcmd.LoadFromFile(secretOption.BootStrapKubeConfigFile)
+			if err != nil {
+				return false, err
+			}
+
+			if valid, err := IsHubKubeconfigValid(kubeconfig, hubKubeconfig); !valid || err != nil {
 				return valid, err
 			}
 		}

@@ -12,9 +12,9 @@ import (
 	informerv1 "open-cluster-management.io/api/client/cluster/informers/externalversions/cluster/v1"
 	listerv1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
-	"strconv"
 )
 
 const (
@@ -34,6 +34,7 @@ type ClusterService struct {
 	clusterClient   clusterclient.Interface
 	clusterLister   listerv1.ManagedClusterLister
 	clusterInformer informerv1.ManagedClusterInformer
+	codec           *cluster.ManagedClusterCodec
 }
 
 func NewClusterService(clusterClient clusterclient.Interface, clusterInformer informerv1.ManagedClusterInformer) server.Service {
@@ -41,6 +42,7 @@ func NewClusterService(clusterClient clusterclient.Interface, clusterInformer in
 		clusterClient:   clusterClient,
 		clusterLister:   clusterInformer.Lister(),
 		clusterInformer: clusterInformer,
+		codec:           cluster.NewManagedClusterCodec(),
 	}
 }
 
@@ -50,7 +52,7 @@ func (c *ClusterService) Get(_ context.Context, resourceID string) (*cloudevents
 		return nil, err
 	}
 
-	evt, err := convertClusterToEvent(cluster)
+	evt, err := c.codec.Encode(source, types.CloudEventsType{}, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +71,7 @@ func (c *ClusterService) List(listOpts types.ListOptions) ([]*cloudevents.Event,
 		return nil, err
 	}
 
-	evt, err := convertClusterToEvent(cluster)
+	evt, err := c.codec.Encode(source, types.CloudEventsType{}, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +81,17 @@ func (c *ClusterService) List(listOpts types.ListOptions) ([]*cloudevents.Event,
 
 // q if there is resourceVersion, this will return directly to the agent as conflict?
 func (c *ClusterService) HandleStatusUpdate(ctx context.Context, evt *cloudevents.Event) error {
-	cluster, action, err := convertEventToCluster(evt)
+	eventType, err := types.ParseCloudEventsType(evt.Type())
+	if err != nil {
+		return fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
+	}
+	cluster, err := c.codec.Decode(evt)
 	if err != nil {
 		return err
 	}
 
 	// only create and update action
-	switch action {
+	switch eventType.Action {
 	case createRequestAction:
 		_, err := c.clusterClient.ClusterV1().ManagedClusters().Create(ctx, cluster, metav1.CreateOptions{})
 		if err != nil {
@@ -121,42 +127,4 @@ func (c *ClusterService) RegisterHandler(handler server.EventHandler) {
 		},
 		// agent does not need to care about delete event
 	})
-}
-
-func convertEventToCluster(evt *cloudevents.Event) (*clusterv1.ManagedCluster, string, error) {
-	eventType, err := types.ParseCloudEventsType(evt.Type())
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
-	}
-
-	cluster := &clusterv1.ManagedCluster{}
-	if err := evt.DataAs(cluster); err != nil {
-		return nil, "", fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
-	}
-
-	return cluster, string(eventType.Action), nil
-}
-
-func convertClusterToEvent(cluster *clusterv1.ManagedCluster) (*cloudevents.Event, error) {
-	resourceVersion, err := strconv.ParseInt(cluster.ResourceVersion, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	evt := types.NewEventBuilder(source, types.CloudEventsType{}).
-		WithClusterName(cluster.Name).
-		// question do we need to set uid?
-		WithResourceID(cluster.Name).
-		WithResourceVersion(resourceVersion).
-		NewEvent()
-	if !cluster.DeletionTimestamp.IsZero() {
-		evt.SetExtension(types.ExtensionDeletionTimestamp, cluster.DeletionTimestamp.Time)
-		return &evt, nil
-	}
-
-	// can we set the whole cluster resource into the data? what is the impact?
-	if err := evt.SetData(cloudevents.ApplicationJSON, cluster); err != nil {
-		return nil, fmt.Errorf("failed to encode manifestwork status to a cloudevent: %v", err)
-	}
-
-	return &evt, nil
 }

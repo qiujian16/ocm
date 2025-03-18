@@ -41,6 +41,7 @@ type SpokeAgentOptions struct {
 	HubClusterArn               string
 	ManagedClusterArn           string
 	ManagedClusterRoleSuffix    string
+	HubBootstrapConfig          string
 }
 
 func NewSpokeAgentOptions() *SpokeAgentOptions {
@@ -87,6 +88,9 @@ func (o *SpokeAgentOptions) AddFlags(fs *pflag.FlagSet) {
 		"The ARN of the EKS based managed cluster.")
 	fs.StringVar(&o.ManagedClusterRoleSuffix, "managed-cluster-role-suffix", o.ManagedClusterRoleSuffix,
 		"The suffix of the managed cluster IAM role.")
+	fs.StringVar(&o.HubBootstrapConfig, "bootstrap-config", o.HubBootstrapConfig,
+		"The path of the bootstrap config file for hub registration.")
+
 }
 
 // Validate verifies the inputs.
@@ -97,8 +101,8 @@ func (o *SpokeAgentOptions) Validate() error {
 			return errors.New("expect at least 2 bootstrap kubeconfigs")
 		}
 	} else if !features.SpokeMutableFeatureGate.Enabled(ocmfeature.MultipleHubs) {
-		if o.BootstrapKubeconfig == "" {
-			return errors.New("bootstrap-kubeconfig is required")
+		if o.BootstrapKubeconfig == "" && o.HubBootstrapConfig == "" {
+			return errors.New("bootstrap-kubeconfig or bootstrap config is required")
 		}
 	}
 

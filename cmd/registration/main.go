@@ -3,6 +3,7 @@ package main
 import (
 	goflag "flag"
 	"fmt"
+	"open-cluster-management.io/ocm/pkg/server/grpc"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -62,6 +63,7 @@ func newRegistrationCommand() *cobra.Command {
 	cmd.AddCommand(hub.NewRegistrationController())
 	cmd.AddCommand(spoke.NewRegistrationAgent())
 	cmd.AddCommand(webhook.NewRegistrationWebhook())
+	cmd.AddCommand(grpc.NewGRPCServer())
 
 	return cmd
 }
