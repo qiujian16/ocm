@@ -33,7 +33,7 @@ import (
 // isCertificateValid return true if
 // 1) All certs in client certificate are not expired.
 // 2) At least one cert matches the given subject if specified
-func isCertificateValid(logger klog.Logger, certData []byte, subject *pkix.Name) (bool, error) {
+func IsCertificateValid(logger klog.Logger, certData []byte, subject *pkix.Name) (bool, error) {
 	certs, err := certutil.ParseCertsPEM(certData)
 	if err != nil {
 		return false, fmt.Errorf("unable to parse certificate: %v", err)
@@ -85,7 +85,7 @@ func certMatchSubject(cert *x509.Certificate, subject *pkix.Name) bool {
 }
 
 // getCertValidityPeriod returns the validity period of the client certificate in the secret
-func getCertValidityPeriod(secret *corev1.Secret) (*time.Time, *time.Time, error) {
+func GetCertValidityPeriod(secret *corev1.Secret) (*time.Time, *time.Time, error) {
 	if secret.Data == nil {
 		return nil, nil, fmt.Errorf("no client certificate found in secret %q", secret.Namespace+"/"+secret.Name)
 	}

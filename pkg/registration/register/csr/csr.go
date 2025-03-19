@@ -122,7 +122,7 @@ func (c *CSRDriver) Process(
 			secret.Data[k] = v
 		}
 
-		notBefore, notAfter, err := getCertValidityPeriod(secret)
+		notBefore, notAfter, err := GetCertValidityPeriod(secret)
 
 		cond := &metav1.Condition{
 			Type:    "ClusterCertificateRotated",
@@ -149,7 +149,7 @@ func (c *CSRDriver) Process(
 	// a. there is no valid client certificate issued for the current cluster/agent;
 	// b. client certificate is sensitive to the additional secret data and the data changes;
 	// c. client certificate exists and has less than a random percentage range from 20% to 25% of its life remaining;
-	shouldCreate, err := shouldCreateCSR(
+	shouldCreate, err := ShouldCreateCSR(
 		logger,
 		controllerName,
 		secret,
@@ -265,7 +265,7 @@ func (c *CSRDriver) IsHubKubeConfigValid(ctx context.Context, secretOption regis
 		}
 	}
 
-	return isCertificateValid(logger, certData, nil)
+	return IsCertificateValid(logger, certData, nil)
 }
 
 func (c *CSRDriver) ManagedClusterDecorator(cluster *clusterv1.ManagedCluster) *clusterv1.ManagedCluster {
@@ -276,7 +276,7 @@ func NewCSRDriver() register.RegisterDriver {
 	return &CSRDriver{}
 }
 
-func shouldCreateCSR(
+func ShouldCreateCSR(
 	logger klog.Logger,
 	controllerName string,
 	secret *corev1.Secret,
@@ -285,7 +285,7 @@ func shouldCreateCSR(
 	additionalSecretData map[string][]byte) (bool, error) {
 	// create a csr to request new client certificate if
 	// a.there is no valid client certificate issued for the current cluster/agent
-	valid, err := isCertificateValid(logger, secret.Data[TLSCertFile], subject)
+	valid, err := IsCertificateValid(logger, secret.Data[TLSCertFile], subject)
 	if err != nil {
 		recorder.Eventf("CertificateValidationFailed", "Failed to validate client certificate for %s: %v", controllerName, err)
 		return true, nil
@@ -302,7 +302,7 @@ func shouldCreateCSR(
 	}
 
 	// c.client certificate exists and has less than a random percentage range from 20% to 25% of its life remaining
-	notBefore, notAfter, err := getCertValidityPeriod(secret)
+	notBefore, notAfter, err := GetCertValidityPeriod(secret)
 	if err != nil {
 		return false, err
 	}

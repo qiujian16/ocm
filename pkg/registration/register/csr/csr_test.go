@@ -19,7 +19,6 @@ import (
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2/ktesting"
 
 	testingcommon "open-cluster-management.io/ocm/pkg/common/testing"
@@ -69,7 +68,7 @@ func TestProcess(t *testing.T) {
 			validateActions: func(t *testing.T, hubActions []clienttesting.Action, secret *corev1.Secret) {
 				logger, _ := ktesting.NewTestContext(t)
 				testingcommon.AssertActions(t, hubActions, "get", "get")
-				valid, err := isCertificateValid(logger, secret.Data[TLSCertFile], testSubject)
+				valid, err := IsCertificateValid(logger, secret.Data[TLSCertFile], testSubject)
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
@@ -403,11 +402,15 @@ func TestIsHubKubeConfigValidFunc(t *testing.T) {
 				testinghelpers.WriteFile(path.Join(tempDir, "tls.crt"), c.tlsCert)
 			}
 			if c.bootstapKubeconfig != nil {
-				bootstrapKubeconfig, err := clientcmd.Load(c.bootstapKubeconfig)
+				kubeConfigFile, err := os.Create(path.Join(tempDir, "kubeconfig"))
 				if err != nil {
 					t.Fatal(err)
 				}
-				secretOption.BootStrapKubeConfig = bootstrapKubeconfig
+				_, err = kubeConfigFile.Write(c.bootstapKubeconfig)
+				if err != nil {
+					t.Fatal(err)
+				}
+				secretOption.BootStrapKubeConfigFile = kubeConfigFile.Name()
 			}
 
 			valid, err := register.IsHubKubeConfigValidFunc(driver, secretOption)(context.TODO())

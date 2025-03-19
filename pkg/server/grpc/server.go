@@ -2,7 +2,10 @@ package grpc
 
 import (
 	"context"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,7 +24,7 @@ import (
 
 func NewGRPCServer() *cobra.Command {
 	opts := commonoptions.NewOptions()
-	grpcServerOpts := grpcServerOptions{}
+	grpcServerOpts := NewGRPCServerOptions()
 	cmdConfig := opts.
 		NewControllerCommandConfig("grpc-server", version.Get(), grpcServerOpts.Run)
 	cmd := cmdConfig.NewCommandWithContext(context.TODO())
@@ -53,11 +56,17 @@ func (o *grpcServerOptions) Run(ctx context.Context, controllerContext *controll
 	if err != nil {
 		return err
 	}
+	kubeClient, err := kubernetes.NewForConfig(controllerContext.KubeConfig)
 	clusterInformers := clusterv1informers.NewSharedInformerFactory(clusterClient, 30*time.Minute)
+	kubeInformers := kubeinformers.NewSharedInformerFactory(kubeClient, 30*time.Minute)
 	grpcEventServer.RegisterService(
 		cluster.ManagedClusterEventDataType,
 		services.NewClusterService(clusterClient, clusterInformers.Cluster().V1().ManagedClusters()))
+	grpcEventServer.RegisterService(
+		csr.CSREventDataType,
+		services.NewCSRService(kubeClient, kubeInformers.Certificates().V1().CertificateSigningRequests()))
 	go clusterInformers.Start(ctx.Done())
+	go kubeInformers.Start(ctx.Done())
 	go grpcEventServer.Start(ctx)
 
 	<-ctx.Done()

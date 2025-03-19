@@ -62,9 +62,6 @@ func (c *ClusterService) Get(_ context.Context, resourceID string) (*cloudevents
 
 func (c *ClusterService) List(listOpts types.ListOptions) ([]*cloudevents.Event, error) {
 	var evts []*cloudevents.Event
-	if listOpts.Source != source {
-		return evts, nil
-	}
 	//only get single cluster
 	cluster, err := c.clusterLister.Get(listOpts.ClusterName)
 	if err != nil {

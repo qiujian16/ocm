@@ -351,6 +351,8 @@ github.com/inconshreveable/mousetrap
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath
+# github.com/jonboulle/clockwork v0.4.0
+## explicit; go 1.15
 # github.com/josharian/intern v1.0.0
 ## explicit; go 1.5
 github.com/josharian/intern
@@ -1777,9 +1779,7 @@ open-cluster-management.io/api/operator/v1
 open-cluster-management.io/api/utils/work/v1/workapplier
 open-cluster-management.io/api/work/v1
 open-cluster-management.io/api/work/v1alpha1
-# open-cluster-management.io/clusteradm v0.10.1
-## explicit; go 1.22.6
-# open-cluster-management.io/sdk-go v0.15.1-0.20241125015855-1536c3970f8f => github.com/qiujian16/sdk-go v0.0.0-20250317081704-39994a0abb9e
+# open-cluster-management.io/sdk-go v0.15.1-0.20241125015855-1536c3970f8f => github.com/qiujian16/sdk-go v0.0.0-20250319094011-57f9e272defd
 ## explicit; go 1.22.0
 open-cluster-management.io/sdk-go/pkg/apis/cluster/v1alpha1
 open-cluster-management.io/sdk-go/pkg/apis/cluster/v1beta1
@@ -1793,6 +1793,8 @@ open-cluster-management.io/sdk-go/pkg/certrotation
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster/store
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common
+open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr
+open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr/store
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work
 open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/client
@@ -1914,4 +1916,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# open-cluster-management.io/sdk-go => github.com/qiujian16/sdk-go v0.0.0-20250317081704-39994a0abb9e
+# open-cluster-management.io/sdk-go => github.com/qiujian16/sdk-go v0.0.0-20250319094011-57f9e272defd

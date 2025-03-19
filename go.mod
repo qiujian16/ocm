@@ -48,7 +48,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-replace open-cluster-management.io/sdk-go => github.com/qiujian16/sdk-go v0.0.0-20250317081704-39994a0abb9e
+replace open-cluster-management.io/sdk-go => github.com/qiujian16/sdk-go v0.0.0-20250319094011-57f9e272defd
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
@@ -114,6 +114,7 @@ require (
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/jonboulle/clockwork v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
@@ -180,7 +181,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/kms v0.31.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
-	open-cluster-management.io/clusteradm v0.10.1 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
