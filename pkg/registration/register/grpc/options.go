@@ -21,6 +21,8 @@ import (
 	"os"
 )
 
+const signer = "open-cluster-management.io/grpc"
+
 type GRPCOption struct {
 	// ObjectMeta is the ObjectMeta shared by all created csrs. It should use GenerateName instead of Name
 	// to generate random csr names
@@ -107,7 +109,7 @@ func NewGRPCOption(ctx context.Context,
 			},
 			CommonName: fmt.Sprintf("%s%s:%s", user.SubjectPrefix, secretOption.ClusterName, secretOption.AgentName),
 		},
-		SignerName:        "open-cluster-management.io/grpc",
+		SignerName:        signer,
 		control:           &csrControl{csrClientHolder: csrClientHolder},
 		ExpirationSeconds: csrExpirationSecondsInCSROption,
 		grpcConfig:        configData,
