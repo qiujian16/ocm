@@ -3,8 +3,14 @@ package register
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	clusterv1informers "open-cluster-management.io/api/client/cluster/informers/externalversions"
 	"os"
 	"reflect"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -15,6 +21,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
 
+	clusterv1client "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	hubclusterclientset "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	clusterv1listers "open-cluster-management.io/api/client/cluster/listers/cluster/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -231,4 +238,46 @@ func (a *AggregatedHubDriver) Cleanup(ctx context.Context, cluster *clusterv1.Ma
 		}
 	}
 	return errors.NewAggregate(errs)
+}
+
+func BuildClientsFromKubeConfig(s SecretOption, bootstrapped bool) (*Clients, error) {
+	var kubeConfig *rest.Config
+	var err error
+	if bootstrapped {
+		kubeConfig, err = clientcmd.BuildConfigFromFlags("", s.BootStrapKubeConfigFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load bootstrap kubeconfig from file %q: %w", s.BootStrapKubeConfigFile, err)
+		}
+	} else {
+		kubeConfig, err = clientcmd.BuildConfigFromFlags("", s.HubKubeconfigFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load hub kubeconfig from file %q: %w", s.HubKubeconfigFile, err)
+		}
+	}
+
+	clients := &Clients{}
+	clients.KubeClient, err = kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	clients.ClusterClient, err = clusterv1client.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	clients.KubeInformerFactory = informers.NewSharedInformerFactoryWithOptions(
+		clients.KubeClient,
+		10*time.Minute,
+		informers.WithTweakListOptions(func(listOptions *metav1.ListOptions) {
+			listOptions.LabelSelector = fmt.Sprintf("%s=%s", clusterv1.ClusterNameLabelKey, s.ClusterName)
+		}),
+	)
+	clients.ClusterInfomerFactory = clusterv1informers.NewSharedInformerFactoryWithOptions(
+		clients.ClusterClient,
+		10*time.Minute,
+		clusterv1informers.WithTweakListOptions(func(listOptions *metav1.ListOptions) {
+			listOptions.FieldSelector = fields.OneTermEqualSelector("metadata.name", s.ClusterName).String()
+		}),
+	)
+	return clients, nil
 }

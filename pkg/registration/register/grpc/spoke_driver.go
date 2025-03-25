@@ -2,23 +2,26 @@ package grpc
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	certutil "k8s.io/client-go/util/cert"
-	"k8s.io/client-go/util/keyutil"
 	"k8s.io/klog/v2"
+	clusterv1informers "open-cluster-management.io/api/client/cluster/informers/externalversions"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"open-cluster-management.io/ocm/pkg/registration/register"
 	"open-cluster-management.io/ocm/pkg/registration/register/csr"
+	cloudeventscluster "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster"
+	clusterstore "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster/store"
+	cloudeventscsr "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr"
+	csrstore "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"os"
 	"path"
+	"time"
 )
 
 type GRPCDriver struct {
@@ -33,159 +36,95 @@ type GRPCDriver struct {
 	//   3. csrName set, keyData set: we are waiting for a new cert to be signed.
 	//   4. csrName empty, keydata set: the CSR failed to create, this shouldn't happen, it's a bug.
 	keyData []byte
+
+	csrDriver *csr.CSRDriver
 }
 
+var _ register.RegisterDriver = &GRPCDriver{}
+var _ register.CSRDriver = &GRPCDriver{}
+
 func NewGRPCDriver() register.RegisterDriver {
-	return &GRPCDriver{}
+	return &GRPCDriver{
+		csrDriver: csr.NewCSRDriver(),
+	}
+}
+
+func (d *GRPCDriver) CSRControl() register.CSRControl {
+	return d.csrDriver.CSRControl()
+}
+
+func (d *GRPCDriver) BuildClients(ctx context.Context, secretOption register.SecretOption, bootstrapped bool) (*register.Clients, error) {
+	// For cloudevents drivers, we build hub client based on different driver configuration.
+	clusterWatcherStore := clusterstore.NewAgentInformerWatcherStore()
+	csrWatcherStore := csrstore.NewAgentInformerWatcherStore()
+	var config any
+	var err error
+	if bootstrapped {
+		_, config, err = generic.NewConfigLoader("grpc", secretOption.HubBootstrapConfig).
+			LoadConfig()
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to load hub bootstrap registration config from file %q: %w",
+				secretOption.HubBootstrapConfig, err)
+		}
+	} else {
+		_, config, err = generic.NewConfigLoader("grpc", secretOption.HubConfig).
+			LoadConfig()
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to load hub registration config from file %q: %w",
+				secretOption.HubBootstrapConfig, err)
+		}
+	}
+
+	clientHolder, err := cloudeventscluster.NewClientHolderBuilder(config).
+		WithClientID(secretOption.ClusterName).
+		WithClusterName(secretOption.ClusterName).
+		WithCodec(cloudeventscluster.NewManagedClusterCodec()).
+		WithClusterClientWatcherStore(clusterWatcherStore).
+		NewAgentClientHolder(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	csrClientHolder, err := cloudeventscsr.NewClientHolderBuilder(config).
+		WithClientID(secretOption.ClusterName).
+		WithClusterName(secretOption.ClusterName).
+		WithCodec(cloudeventscsr.NewCSRCodec()).
+		WithCSRClientWatcherStore(csrWatcherStore).
+		NewAgentClientHolder(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	d.csrDriver.CSRControlFunc = &csrControl{csrClientHolder: csrClientHolder}
+	err = d.csrDriver.CSRControlFunc.Informer().AddIndexers(cache.Indexers{
+		csr.IndexByCluster: csr.IndexByClusterFunc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	d.csrDriver.HaltCSRCreation = csr.HaltCSRCreationFunc(
+		d.csrDriver.CSRControlFunc.Informer().GetIndexer(), secretOption.ClusterName)
+
+	clients := &register.Clients{}
+	clients.ClusterClient = clientHolder.ClusterInterface()
+	clients.ClusterInfomerFactory = clusterv1informers.NewSharedInformerFactory(clients.ClusterClient, 10*time.Minute)
+	if clusterWatcherStore != nil {
+		clusterWatcherStore.SetInformer(clients.ClusterInfomerFactory.Cluster().V1().ManagedClusters().Informer())
+	}
+	return clients, nil
 }
 
 func (c *GRPCDriver) Process(
 	ctx context.Context, controllerName string, secret *corev1.Secret, additionalSecretData map[string][]byte,
 	recorder events.Recorder, opt any) (*corev1.Secret, *metav1.Condition, error) {
-	logger := klog.FromContext(ctx)
 	grpcOption, ok := opt.(*GRPCOption)
 	if !ok {
 		return nil, nil, fmt.Errorf("option type is not correct")
 	}
 
-	// reconcile pending csr if exists
-	if len(c.csrName) > 0 {
-		// build a secret data map if the csr is approved
-		newSecretConfig, err := func() (map[string][]byte, error) {
-			// skip if there is no ongoing csr
-			if len(c.csrName) == 0 {
-				return nil, fmt.Errorf("no ongoing csr")
-			}
-
-			// skip if csr is not approved yet
-			isApproved, err := grpcOption.control.isApproved(c.csrName)
-			if err != nil {
-				return nil, err
-			}
-			if !isApproved {
-				return nil, nil
-			}
-
-			// skip if csr is not issued
-			certData, err := grpcOption.control.getIssuedCertificate(c.csrName)
-			if err != nil {
-				return nil, err
-			}
-			if len(certData) == 0 {
-				return nil, nil
-			}
-
-			logger.Info("Sync csr", "name", c.csrName)
-			// check if cert in csr status matches with the corresponding private key
-			if c.keyData == nil {
-				return nil, fmt.Errorf("no private key found for certificate in csr: %s", c.csrName)
-			}
-			_, err = tls.X509KeyPair(certData, c.keyData)
-			if err != nil {
-				return nil, fmt.Errorf("private key does not match with the certificate in csr: %s", c.csrName)
-			}
-
-			data := map[string][]byte{
-				"grpc.yaml":     grpcOption.grpcConfig,
-				csr.TLSCertFile: certData,
-				csr.TLSKeyFile:  c.keyData,
-			}
-
-			return data, nil
-		}()
-
-		if err != nil {
-			c.reset()
-			return secret, &metav1.Condition{
-				Type:    "ClusterCertificateRotated",
-				Status:  metav1.ConditionFalse,
-				Reason:  "ClientCertificateUpdateFailed",
-				Message: fmt.Sprintf("Failed to rotated client certificate %v", err),
-			}, err
-		}
-		if len(newSecretConfig) == 0 {
-			return nil, nil, nil
-		}
-		// append additional data into client certificate secret
-		for k, v := range newSecretConfig {
-			secret.Data[k] = v
-		}
-
-		notBefore, notAfter, err := csr.GetCertValidityPeriod(secret)
-
-		cond := &metav1.Condition{
-			Type:    "ClusterCertificateRotated",
-			Status:  metav1.ConditionTrue,
-			Reason:  "ClientCertificateUpdated",
-			Message: fmt.Sprintf("client certificate rotated starting from %v to %v", *notBefore, *notAfter),
-		}
-
-		if err != nil {
-			cond = &metav1.Condition{
-				Type:    "ClusterCertificateRotated",
-				Status:  metav1.ConditionFalse,
-				Reason:  "ClientCertificateUpdateFailed",
-				Message: fmt.Sprintf("Failed to rotated client certificate %v", err),
-			}
-		} else {
-			recorder.Eventf("ClientCertificateCreated", "A new client certificate for %s is available", controllerName)
-		}
-		c.reset()
-		return secret, cond, err
-	}
-
-	// create a csr to request new client certificate if
-	// a. there is no valid client certificate issued for the current cluster/agent;
-	// b. client certificate is sensitive to the additional secret data and the data changes;
-	// c. client certificate exists and has less than a random percentage range from 20% to 25% of its life remaining;
-	shouldCreate, err := csr.ShouldCreateCSR(
-		logger,
-		controllerName,
-		secret,
-		recorder,
-		grpcOption.Subject,
-		additionalSecretData)
-	if err != nil {
-		return secret, nil, err
-	}
-	if !shouldCreate {
-		return nil, nil, nil
-	}
-
-	keyData, createdCSRName, err := func() ([]byte, string, error) {
-		// create a new private key
-		keyData, err := keyutil.MakeEllipticPrivateKeyPEM()
-		if err != nil {
-			return nil, "", err
-		}
-
-		privateKey, err := keyutil.ParsePrivateKeyPEM(keyData)
-		if err != nil {
-			return keyData, "", fmt.Errorf("invalid private key for certificate request: %w", err)
-		}
-		csrData, err := certutil.MakeCSR(privateKey, grpcOption.Subject, grpcOption.DNSNames, nil)
-		if err != nil {
-			return keyData, "", fmt.Errorf("unable to generate certificate request: %w", err)
-		}
-		createdCSRName, err := grpcOption.control.create(
-			ctx, recorder, grpcOption.ObjectMeta, csrData, grpcOption.SignerName, grpcOption.ExpirationSeconds)
-		if err != nil {
-			return keyData, "", err
-		}
-		return keyData, createdCSRName, nil
-	}()
-	if err != nil {
-		return nil, &metav1.Condition{
-			Type:    "ClusterCertificateRotated",
-			Status:  metav1.ConditionFalse,
-			Reason:  "ClientCertificateUpdateFailed",
-			Message: fmt.Sprintf("Failed to create CSR %v", err),
-		}, err
-	}
-
-	c.keyData = keyData
-	c.csrName = createdCSRName
-	return nil, nil, nil
+	return c.csrDriver.Process(ctx, controllerName, secret, additionalSecretData, recorder, grpcOption.csrOption)
 }
 
 func (c *GRPCDriver) BuildKubeConfigFromTemplate(template *clientcmdapi.Config) *clientcmdapi.Config {
@@ -193,11 +132,7 @@ func (c *GRPCDriver) BuildKubeConfigFromTemplate(template *clientcmdapi.Config) 
 }
 
 func (c *GRPCDriver) InformerHandler(option any) (cache.SharedIndexInformer, factory.EventFilterFunc) {
-	grpcOption, ok := option.(*GRPCOption)
-	if !ok {
-		utilruntime.Must(fmt.Errorf("option type is not correct"))
-	}
-	return grpcOption.control.Informer(), nil
+	return c.csrDriver.CSRControl().Informer(), nil
 }
 
 func (c *GRPCDriver) IsHubKubeConfigValid(ctx context.Context, secretOption register.SecretOption) (bool, error) {

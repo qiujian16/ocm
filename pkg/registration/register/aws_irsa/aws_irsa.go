@@ -35,18 +35,15 @@ type AWSIRSADriver struct {
 	managedClusterArn        string
 	hubClusterArn            string
 	managedClusterRoleSuffix string
+
+	awsISRAControl AWSIRSAControl
 }
 
 func (c *AWSIRSADriver) Process(
 	ctx context.Context, controllerName string, secret *corev1.Secret, additionalSecretData map[string][]byte,
 	recorder events.Recorder, opt any) (*corev1.Secret, *metav1.Condition, error) {
 
-	awsOption, ok := opt.(*AWSOption)
-	if !ok {
-		return nil, nil, fmt.Errorf("option type is not correct")
-	}
-
-	isApproved, err := awsOption.AWSIRSAControl.isApproved(c.name)
+	isApproved, err := c.awsISRAControl.isApproved(c.name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -87,7 +84,7 @@ func (c *AWSIRSADriver) InformerHandler(option any) (cache.SharedIndexInformer, 
 	if !ok {
 		utilruntime.Must(fmt.Errorf("option type is not correct"))
 	}
-	return awsOption.AWSIRSAControl.Informer(), awsOption.EventFilterFunc
+	return c.awsISRAControl.Informer(), awsOption.EventFilterFunc
 }
 
 func (c *AWSIRSADriver) IsHubKubeConfigValid(ctx context.Context, secretOption register.SecretOption) (bool, error) {
@@ -102,6 +99,20 @@ func (c *AWSIRSADriver) ManagedClusterDecorator(cluster *clusterv1.ManagedCluste
 	cluster.Annotations[operatorv1.ClusterAnnotationsKeyPrefix+"/"+ManagedClusterArn] = c.managedClusterArn
 	cluster.Annotations[operatorv1.ClusterAnnotationsKeyPrefix+"/"+ManagedClusterIAMRoleSuffix] = c.managedClusterRoleSuffix
 	return cluster
+}
+
+func (c *AWSIRSADriver) BuildClients(_ context.Context, secretOption register.SecretOption, bootstrapped bool) (*register.Clients, error) {
+	clients, err := register.BuildClientsFromKubeConfig(secretOption, bootstrapped)
+	if err != nil {
+		return nil, err
+	}
+	awsIrsaControl, err := NewAWSIRSAControl(clients.ClusterInfomerFactory.Cluster(), clients.ClusterClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AWS IRSA control: %w", err)
+	}
+
+	c.awsISRAControl = awsIrsaControl
+	return clients, nil
 }
 
 func NewAWSIRSADriver(managedClusterArn string, managedClusterRoleSuffix string, hubClusterArn string, name string) register.RegisterDriver {

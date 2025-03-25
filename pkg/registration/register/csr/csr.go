@@ -49,6 +49,11 @@ type CSRDriver struct {
 	//   3. csrName set, keyData set: we are waiting for a new cert to be signed.
 	//   4. csrName empty, keydata set: the CSR failed to create, this shouldn't happen, it's a bug.
 	keyData []byte
+
+	CSRControlFunc register.CSRControl
+
+	// HaltCSRCreation halt the csr creation
+	HaltCSRCreation func() bool
 }
 
 func (c *CSRDriver) Process(
@@ -70,7 +75,7 @@ func (c *CSRDriver) Process(
 			}
 
 			// skip if csr is not approved yet
-			isApproved, err := csrOption.CSRControl.isApproved(c.csrName)
+			isApproved, err := c.CSRControlFunc.IsApproved(c.csrName)
 			if err != nil {
 				return nil, err
 			}
@@ -79,7 +84,7 @@ func (c *CSRDriver) Process(
 			}
 
 			// skip if csr is not issued
-			certData, err := csrOption.CSRControl.getIssuedCertificate(c.csrName)
+			certData, err := c.CSRControlFunc.GetIssuedCertificate(c.csrName)
 			if err != nil {
 				return nil, err
 			}
@@ -163,8 +168,7 @@ func (c *CSRDriver) Process(
 		return nil, nil, nil
 	}
 
-	shouldHalt := csrOption.HaltCSRCreation()
-	if shouldHalt {
+	if c.HaltCSRCreation() {
 		recorder.Eventf("ClientCertificateCreationHalted",
 			"Stop creating csr since there are too many csr created already on hub", controllerName)
 		return nil, &metav1.Condition{
@@ -190,7 +194,7 @@ func (c *CSRDriver) Process(
 		if err != nil {
 			return keyData, "", fmt.Errorf("unable to generate certificate request: %w", err)
 		}
-		createdCSRName, err := csrOption.CSRControl.create(
+		createdCSRName, err := c.CSRControlFunc.Create(
 			ctx, recorder, csrOption.ObjectMeta, csrData, csrOption.SignerName, csrOption.ExpirationSeconds)
 		if err != nil {
 			return keyData, "", err
@@ -230,7 +234,7 @@ func (c *CSRDriver) InformerHandler(option any) (cache.SharedIndexInformer, fact
 	if !ok {
 		utilruntime.Must(fmt.Errorf("option type is not correct"))
 	}
-	return csrOption.CSRControl.Informer(), csrOption.EventFilterFunc
+	return c.CSRControlFunc.Informer(), csrOption.EventFilterFunc
 }
 
 func (c *CSRDriver) IsHubKubeConfigValid(ctx context.Context, secretOption register.SecretOption) (bool, error) {
@@ -272,7 +276,36 @@ func (c *CSRDriver) ManagedClusterDecorator(cluster *clusterv1.ManagedCluster) *
 	return cluster
 }
 
-func NewCSRDriver() register.RegisterDriver {
+func (c *CSRDriver) BuildClients(ctx context.Context, secretOption register.SecretOption, bootstrapped bool) (*register.Clients, error) {
+	clients, err := register.BuildClientsFromKubeConfig(secretOption, bootstrapped)
+	if err != nil {
+		return nil, err
+	}
+
+	logger := klog.FromContext(ctx)
+	csrControl, err := NewCSRControl(logger, clients.KubeInformerFactory.Certificates(), clients.KubeClient)
+	if err != nil {
+		return nil, err
+	}
+	c.CSRControlFunc = csrControl
+	err = csrControl.Informer().AddIndexers(cache.Indexers{
+		IndexByCluster: IndexByClusterFunc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	c.HaltCSRCreation = HaltCSRCreationFunc(csrControl.Informer().GetIndexer(), secretOption.ClusterName)
+	return clients, err
+}
+
+func (c *CSRDriver) CSRControl() register.CSRControl {
+	return c.CSRControlFunc
+}
+
+var _ register.RegisterDriver = &CSRDriver{}
+var _ register.CSRDriver = &CSRDriver{}
+
+func NewCSRDriver() *CSRDriver {
 	return &CSRDriver{}
 }
 

@@ -3,6 +3,7 @@ package csr
 import (
 	"context"
 	"fmt"
+	"open-cluster-management.io/ocm/pkg/registration/register"
 
 	"github.com/openshift/library-go/pkg/operator/events"
 	certificates "k8s.io/api/certificates/v1beta1"
@@ -13,7 +14,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-var _ CSRControl = &v1beta1CSRControl{}
+var _ register.CSRControl = &v1beta1CSRControl{}
 
 type v1beta1CSRControl struct {
 	hubCSRInformer cache.SharedIndexInformer
@@ -21,7 +22,7 @@ type v1beta1CSRControl struct {
 	hubCSRClient   csrclient.CertificateSigningRequestInterface
 }
 
-func (v *v1beta1CSRControl) isApproved(name string) (bool, error) {
+func (v *v1beta1CSRControl) IsApproved(name string) (bool, error) {
 	csr, err := v.get(name)
 	if err != nil {
 		return false, err
@@ -38,7 +39,7 @@ func (v *v1beta1CSRControl) isApproved(name string) (bool, error) {
 	return approved, nil
 }
 
-func (v *v1beta1CSRControl) getIssuedCertificate(name string) ([]byte, error) {
+func (v *v1beta1CSRControl) GetIssuedCertificate(name string) ([]byte, error) {
 	csr, err := v.get(name)
 	if err != nil {
 		return nil, err
@@ -51,7 +52,7 @@ func (v *v1beta1CSRControl) getIssuedCertificate(name string) ([]byte, error) {
 	return v1beta1CSR.Status.Certificate, nil
 }
 
-func (v *v1beta1CSRControl) create(ctx context.Context, recorder events.Recorder, objMeta metav1.ObjectMeta,
+func (v *v1beta1CSRControl) Create(ctx context.Context, recorder events.Recorder, objMeta metav1.ObjectMeta,
 	csrData []byte, signerName string, expirationSeconds *int32) (string, error) {
 	csr := &certificates.CertificateSigningRequest{
 		ObjectMeta: objMeta,

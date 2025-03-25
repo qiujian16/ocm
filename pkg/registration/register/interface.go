@@ -2,6 +2,10 @@ package register
 
 import (
 	"context"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	clusterv1client "open-cluster-management.io/api/client/cluster/clientset/versioned"
+	clusterv1informers "open-cluster-management.io/api/client/cluster/informers/externalversions"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -45,6 +49,16 @@ type SecretOption struct {
 
 	ManagementSecretInformer cache.SharedIndexInformer
 	ManagementCoreClient     corev1client.CoreV1Interface
+
+	HubBootstrapConfig string
+	HubConfig          string
+}
+
+type Clients struct {
+	ClusterClient         clusterv1client.Interface
+	KubeClient            kubernetes.Interface
+	ClusterInfomerFactory clusterv1informers.SharedInformerFactory
+	KubeInformerFactory   informers.SharedInformerFactory
 }
 
 // StatusUpdateFunc is A function to update the condition of the corresponding object.
@@ -74,6 +88,8 @@ type RegisterDriver interface {
 
 	// ManagedClusterDecorator is to change managed cluster metadata or spec during registration process.
 	ManagedClusterDecorator(cluster *clusterv1.ManagedCluster) *clusterv1.ManagedCluster
+
+	BuildClients(ctx context.Context, s SecretOption, bootstrapped bool) (*Clients, error)
 }
 
 // HubDriver interface is used to implement operations required to complete aws-irsa registration and csr registration.
@@ -96,4 +112,18 @@ type HubDriver interface {
 	// setting hubAcceptClient based on autoApprovedIdentities. If the cluster is not managed by a HubDriver
 	// implementation, this method should return true
 	Accept(cluster *clusterv1.ManagedCluster) bool
+}
+
+type CSRDriver interface {
+	CSRControl() CSRControl
+}
+
+// interface to manage csr
+type CSRControl interface {
+	Create(ctx context.Context, recorder events.Recorder, objMeta metav1.ObjectMeta, csrData []byte, signerName string, expirationSeconds *int32) (string, error)
+	IsApproved(name string) (bool, error)
+	GetIssuedCertificate(name string) ([]byte, error)
+
+	// Informer is public so we can add indexer outside
+	Informer() cache.SharedIndexInformer
 }

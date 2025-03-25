@@ -6,6 +6,7 @@ import (
 	"crypto/x509/pkix"
 	"errors"
 	"fmt"
+	"open-cluster-management.io/ocm/pkg/registration/register"
 	"strings"
 	"time"
 
@@ -148,16 +149,7 @@ func GetClusterAgentNamesFromCertificate(certData []byte) (clusterName, agentNam
 	return "", "", nil
 }
 
-type CSRControl interface {
-	create(ctx context.Context, recorder events.Recorder, objMeta metav1.ObjectMeta, csrData []byte, signerName string, expirationSeconds *int32) (string, error)
-	isApproved(name string) (bool, error)
-	getIssuedCertificate(name string) ([]byte, error)
-
-	// Informer is public so we can add indexer outside
-	Informer() cache.SharedIndexInformer
-}
-
-var _ CSRControl = &v1CSRControl{}
+var _ register.CSRControl = &v1CSRControl{}
 
 type v1CSRControl struct {
 	hubCSRInformer cache.SharedIndexInformer
@@ -165,7 +157,7 @@ type v1CSRControl struct {
 	hubCSRClient   csrclient.CertificateSigningRequestInterface
 }
 
-func (v *v1CSRControl) isApproved(name string) (bool, error) {
+func (v *v1CSRControl) IsApproved(name string) (bool, error) {
 	csr, err := v.get(name)
 	if err != nil {
 		return false, err
@@ -182,7 +174,7 @@ func (v *v1CSRControl) isApproved(name string) (bool, error) {
 	return approved, nil
 }
 
-func (v *v1CSRControl) getIssuedCertificate(name string) ([]byte, error) {
+func (v *v1CSRControl) GetIssuedCertificate(name string) ([]byte, error) {
 	csr, err := v.get(name)
 	if err != nil {
 		return nil, err
@@ -191,7 +183,7 @@ func (v *v1CSRControl) getIssuedCertificate(name string) ([]byte, error) {
 	return v1CSR.Status.Certificate, nil
 }
 
-func (v *v1CSRControl) create(ctx context.Context, recorder events.Recorder, objMeta metav1.ObjectMeta, csrData []byte,
+func (v *v1CSRControl) Create(ctx context.Context, recorder events.Recorder, objMeta metav1.ObjectMeta, csrData []byte,
 	signerName string, expirationSeconds *int32) (string, error) {
 	csr := &certificates.CertificateSigningRequest{
 		ObjectMeta: objMeta,
@@ -234,7 +226,7 @@ func (v *v1CSRControl) get(name string) (metav1.Object, error) {
 	return csr, nil
 }
 
-func NewCSRControl(logger klog.Logger, hubCSRInformer certificatesinformers.Interface, hubKubeClient kubernetes.Interface) (CSRControl, error) {
+func NewCSRControl(logger klog.Logger, hubCSRInformer certificatesinformers.Interface, hubKubeClient kubernetes.Interface) (register.CSRControl, error) {
 	if features.SpokeMutableFeatureGate.Enabled(ocmfeature.V1beta1CSRAPICompatibility) {
 		v1CSRSupported, v1beta1CSRSupported, err := helpers.IsCSRSupported(hubKubeClient)
 		if err != nil {
