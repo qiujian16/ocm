@@ -3,6 +3,8 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"gopkg.in/yaml.v2"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"os"
 	"path"
 	"time"
@@ -36,16 +38,17 @@ import (
 )
 
 type GRPCDriver struct {
-	csrDriver *csr.CSRDriver
-	control   *csrControl
-	opt       *Option
+	csrDriver      *csr.CSRDriver
+	control        *csrControl
+	opt            *Option
+	configTemplate *grpc.GRPCConfig
 }
 
 var _ register.RegisterDriver = &GRPCDriver{}
 var _ register.AddonDriver = &GRPCDriver{}
 
 func NewGRPCDriver(opt *Option, csrOption *csr.Option, secretOption register.SecretOption) register.RegisterDriver {
-	secretOption.Signer = "open-cluster-management.io/signer"
+	secretOption.Signer = signer
 	return &GRPCDriver{
 		csrDriver: csr.NewCSRDriver(csrOption, secretOption),
 		opt:       opt,
@@ -63,6 +66,23 @@ func (d *GRPCDriver) BuildClients(ctx context.Context, secretOption register.Sec
 			return nil, fmt.Errorf(
 				"failed to load hub bootstrap registration config from file %q: %w",
 				d.opt.BootstrapConfigFile, err)
+		}
+
+		configData, err := os.ReadFile(d.opt.BootstrapConfigFile)
+		if err != nil {
+			return nil, err
+		}
+
+		bootstrapConfig := &grpc.GRPCConfig{}
+		if err := yaml.Unmarshal(configData, bootstrapConfig); err != nil {
+			return nil, err
+		}
+		d.configTemplate = &grpc.GRPCConfig{
+			URL:             bootstrapConfig.URL,
+			CAFile:          bootstrapConfig.CAFile,
+			KeepAliveConfig: bootstrapConfig.KeepAliveConfig,
+			ClientKeyFile:   path.Join(secretOption.HubKubeconfigDir, csr.TLSKeyFile),
+			ClientCertFile:  path.Join(secretOption.HubKubeconfigDir, csr.TLSCertFile),
 		}
 	} else {
 		_, config, err = generic.NewConfigLoader("grpc", d.opt.ConfigFile).
@@ -166,6 +186,11 @@ func (c *GRPCDriver) Fork(addonName string, secretOption register.SecretOption) 
 func (c *GRPCDriver) Process(
 	ctx context.Context, controllerName string, secret *corev1.Secret, additionalSecretData map[string][]byte,
 	recorder events.Recorder) (*corev1.Secret, *metav1.Condition, error) {
+	configData, err := yaml.Marshal(c.configTemplate)
+	if err != nil {
+		return nil, nil, err
+	}
+	additionalSecretData["config.yaml"] = configData
 	return c.csrDriver.Process(ctx, controllerName, secret, additionalSecretData, recorder)
 }
 
