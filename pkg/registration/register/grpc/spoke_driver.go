@@ -112,23 +112,25 @@ func (d *GRPCDriver) BuildClients(ctx context.Context, secretOption register.Sec
 		clusterClient, 10*time.Minute).Cluster().V1().ManagedClusters()
 	clusterWatchStore.SetInformer(clusterInformers.Informer())
 
+	leaseWatchStore := cestore.NewAgentInformerWatcherStore[*coordv1.Lease]()
 	leaseClient, err := cloudeventslease.NewLeaseClient(
 		ctx,
 		cloudeventoptions.NewGenericClientOptions[*coordv1.Lease](
 			config,
 			cloudeventslease.NewManagedClusterAddOnCodec(),
 			secretOption.ClusterName,
-		).WithClusterName(secretOption.ClusterName),
+		).WithClusterName(secretOption.ClusterName).WithClientWatcherStore(leaseWatchStore),
 		secretOption.ClusterName,
 	)
 
+	eventWatchStore := cestore.NewAgentInformerWatcherStore[*eventsv1.Event]()
 	eventClient, err := cloudeventsevent.NewClientHolder(
 		ctx,
 		cloudeventoptions.NewGenericClientOptions[*eventsv1.Event](
 			config,
 			cloudeventsevent.NewEventCodec(),
 			secretOption.ClusterName,
-		).WithClusterName(secretOption.ClusterName),
+		).WithClusterName(secretOption.ClusterName).WithClientWatcherStore(eventWatchStore),
 	)
 
 	addonWatchStore := cestore.NewAgentInformerWatcherStore[*addonapiv1alpha1.ManagedClusterAddOn]()
