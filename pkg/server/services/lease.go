@@ -5,16 +5,23 @@ import (
 	"fmt"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	leasev1 "k8s.io/client-go/informers/coordination/v1"
 	"k8s.io/client-go/kubernetes"
+	leaselister "k8s.io/client-go/listers/coordination/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
+	csrce "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr"
 	leasece "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/lease"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 )
 
 type LeaseService struct {
-	client kubernetes.Interface
-	codec  leasece.LeaseCodec
+	client   kubernetes.Interface
+	informer leasev1.LeaseInformer
+	lister   leaselister.LeaseLister
+	codec    leasece.LeaseCodec
 }
 
 func (l LeaseService) Get(ctx context.Context, resourceID string) (*cloudevents.Event, error) {
@@ -22,7 +29,7 @@ func (l LeaseService) Get(ctx context.Context, resourceID string) (*cloudevents.
 	if err != nil {
 		return nil, err
 	}
-	lease, err := l.client.CoordinationV1().Leases(namespace).Get(ctx, name, metav1.GetOptions{})
+	lease, err := l.lister.Leases(namespace).Get(name)
 	if err != nil {
 		return nil, err
 	}
@@ -33,13 +40,13 @@ func (l LeaseService) List(listOpts types.ListOptions) ([]*cloudevents.Event, er
 	if len(listOpts.ClusterName) == 0 {
 		return nil, fmt.Errorf("cluster name is empty")
 	}
-	leases, err := l.client.CoordinationV1().Leases(listOpts.ClusterName).List(context.Background(), metav1.ListOptions{})
+	leases, err := l.lister.Leases(listOpts.ClusterName).List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
 	var cloudevts []*cloudevents.Event
-	for _, lease := range leases.Items {
-		cloudevt, err := l.codec.Encode(source, types.CloudEventsType{CloudEventsDataType: leasece.LeaseEventDataType}, &lease)
+	for _, lease := range leases {
+		cloudevt, err := l.codec.Encode(source, types.CloudEventsType{CloudEventsDataType: leasece.LeaseEventDataType}, lease)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +68,7 @@ func (l LeaseService) HandleStatusUpdate(ctx context.Context, evt *cloudevents.E
 	// only create and update action
 	switch eventType.Action {
 	case updateRequestAction:
-		_, err := l.client.CoordinationV1().Leases(lease.Namespace).Create(ctx, lease, metav1.CreateOptions{})
+		_, err := l.client.CoordinationV1().Leases(lease.Namespace).Update(ctx, lease, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -70,12 +77,28 @@ func (l LeaseService) HandleStatusUpdate(ctx context.Context, evt *cloudevents.E
 }
 
 func (l LeaseService) RegisterHandler(handler server.EventHandler) {
-	return
+	l.informer.Informer().AddEventHandler(&cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, _ := cache.MetaNamespaceKeyFunc(obj)
+			if err := handler.OnCreate(context.Background(), leasece.LeaseEventDataType, key); err != nil {
+				klog.Error(err)
+			}
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			key, _ := cache.MetaNamespaceKeyFunc(newObj)
+			if err := handler.OnUpdate(context.Background(), csrce.CSREventDataType, key); err != nil {
+				klog.Error(err)
+			}
+		},
+		// agent does not need to care about delete event
+	})
 }
 
-func NewLeaseService(client kubernetes.Interface) *LeaseService {
+func NewLeaseService(client kubernetes.Interface, informer leasev1.LeaseInformer) *LeaseService {
 	return &LeaseService{
-		client: client,
+		client:   client,
+		informer: informer,
+		lister:   informer.Lister(),
 	}
 }
 

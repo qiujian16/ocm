@@ -205,7 +205,7 @@ func (o *GRPCServerOptions) Run(ctx context.Context, controllerContext *controll
 	)
 	grpcEventServer.RegisterService(
 		leasece.LeaseEventDataType,
-		services.NewLeaseService(kubeClient),
+		services.NewLeaseService(kubeClient, kubeInformers.Coordination().V1().Leases()),
 	)
 	go clusterInformers.Start(ctx.Done())
 	go kubeInformers.Start(ctx.Done())
