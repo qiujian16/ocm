@@ -9,6 +9,8 @@ import (
 	"k8s.io/klog/v2"
 	"math"
 	"net"
+	eventce "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/event"
+	leasece "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/lease"
 	"os"
 	"time"
 
@@ -196,6 +198,14 @@ func (o *GRPCServerOptions) Run(ctx context.Context, controllerContext *controll
 	grpcEventServer.RegisterService(
 		addonce.ManagedClusterAddOnEventDataType,
 		services.NewAddonService(addonClient, addonInformers.Addon().V1alpha1().ManagedClusterAddOns()),
+	)
+	grpcEventServer.RegisterService(
+		eventce.EventEventDataType,
+		services.NewEventService(kubeClient),
+	)
+	grpcEventServer.RegisterService(
+		leasece.LeaseEventDataType,
+		services.NewLeaseService(kubeClient),
 	)
 	go clusterInformers.Start(ctx.Done())
 	go kubeInformers.Start(ctx.Done())
