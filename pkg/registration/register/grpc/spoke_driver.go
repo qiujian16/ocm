@@ -4,7 +4,12 @@ import (
 	"context"
 	"fmt"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"os"
 	"path"
 	"time"
@@ -117,8 +122,10 @@ func (d *GRPCDriver) BuildClients(ctx context.Context, secretOption register.Sec
 		clusterClient, 10*time.Minute).Cluster().V1().ManagedClusters()
 	clusterWatchStore.SetInformer(clusterInformers.Informer())
 
-	leaseWatchStore := cestore.NewAgentInformerWatcherStore[*coordv1.Lease]()
-	leaseWatchStore.Store = cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	leaseWatchStore := &leaseStore{
+		cestore.BaseClientWatchStore[*coordv1.Lease]{
+			Store: cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)},
+	}
 	leaseClient, err := cloudeventslease.NewLeaseClient(
 		ctx,
 		cloudeventoptions.NewGenericClientOptions[*coordv1.Lease](
@@ -244,3 +251,99 @@ func (c *GRPCDriver) IsHubKubeConfigValid(ctx context.Context, secretOption regi
 func (c *GRPCDriver) ManagedClusterDecorator(cluster *clusterv1.ManagedCluster) *clusterv1.ManagedCluster {
 	return cluster
 }
+
+type leaseStore struct {
+	cestore.BaseClientWatchStore[*coordv1.Lease]
+}
+
+func (l leaseStore) GetWatcher(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (l leaseStore) HandleReceivedResource(action types.ResourceAction, resource *coordv1.Lease) error {
+	switch action {
+	case types.Added:
+		newObj, err := utils.ToRuntimeObject(resource)
+		if err != nil {
+			return err
+		}
+
+		return l.Add(newObj)
+	case types.Modified:
+		newObj, err := meta.Accessor(resource)
+		if err != nil {
+			return err
+		}
+
+		lastObj, exists, err := l.Get(newObj.GetNamespace(), newObj.GetName())
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("the resource %s/%s does not exist", newObj.GetNamespace(), newObj.GetName())
+		}
+
+		// prevent the resource from being updated if it is deleting
+		if !lastObj.GetDeletionTimestamp().IsZero() {
+			klog.Warningf("the resource %s/%s is deleting, ignore the update", newObj.GetNamespace(), newObj.GetName())
+			return nil
+		}
+
+		updated, err := utils.ToRuntimeObject(resource)
+		if err != nil {
+			return err
+		}
+
+		return l.Update(updated)
+	case types.Deleted:
+		newObj, err := meta.Accessor(resource)
+		if err != nil {
+			return err
+		}
+
+		if newObj.GetDeletionTimestamp().IsZero() {
+			return nil
+		}
+
+		if len(newObj.GetFinalizers()) != 0 {
+			return nil
+		}
+
+		last, exists, err := l.Get(newObj.GetNamespace(), newObj.GetName())
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+
+		deletingObj, err := utils.ToRuntimeObject(last)
+		if err != nil {
+			return err
+		}
+
+		return l.Delete(deletingObj)
+	default:
+		return fmt.Errorf("unsupported resource action %s", action)
+	}
+	return nil
+}
+
+func (l leaseStore) Add(resource runtime.Object) error {
+	return l.Store.Add(resource)
+}
+
+func (l leaseStore) Update(resource runtime.Object) error {
+	return l.Store.Update(resource)
+}
+
+func (l leaseStore) Delete(resource runtime.Object) error {
+	return l.Store.Delete(resource)
+}
+
+func (l leaseStore) HasInitiated() bool {
+	return true
+}
+
+var _ cestore.ClientWatcherStore[*coordv1.Lease] = &leaseStore{}
