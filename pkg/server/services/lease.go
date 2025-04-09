@@ -12,7 +12,7 @@ import (
 	leaselister "k8s.io/client-go/listers/coordination/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	csrce "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/csr"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	leasece "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/lease"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
@@ -38,11 +38,13 @@ func (l LeaseService) Get(ctx context.Context, resourceID string) (*cloudevents.
 }
 
 func (l LeaseService) List(listOpts types.ListOptions) ([]*cloudevents.Event, error) {
-	klog.Infof("------lease list----")
 	if len(listOpts.ClusterName) == 0 {
 		return nil, fmt.Errorf("cluster name is empty")
 	}
-	leases, err := l.lister.Leases(listOpts.ClusterName).List(labels.Everything())
+	selector := labels.SelectorFromSet(labels.Set{
+		clusterv1.ClusterNameLabelKey: listOpts.ClusterName,
+	})
+	leases, err := l.lister.Leases(listOpts.ClusterName).List(selector)
 	if err != nil {
 		return nil, err
 	}
@@ -82,13 +84,15 @@ func (l LeaseService) RegisterHandler(handler server.EventHandler) {
 	l.informer.Informer().AddEventHandler(&cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, _ := cache.MetaNamespaceKeyFunc(obj)
+			klog.Infof("create ------------------> %s", key)
 			if err := handler.OnCreate(context.Background(), leasece.LeaseEventDataType, key); err != nil {
 				klog.Error(err)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			key, _ := cache.MetaNamespaceKeyFunc(newObj)
-			if err := handler.OnUpdate(context.Background(), csrce.CSREventDataType, key); err != nil {
+			klog.Infof("update ------------------> %s", key)
+			if err := handler.OnUpdate(context.Background(), leasece.LeaseEventDataType, key); err != nil {
 				klog.Error(err)
 			}
 		},
