@@ -1,11 +1,8 @@
 package store
 
 import (
-	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -24,10 +21,6 @@ func NewAgentWatcherStoreLister[T generic.ResourceObject](store ClientWatcherSto
 // List returns the resources from a ClientWatcherStore with list options
 func (l *AgentWatcherStoreLister[T]) List(options types.ListOptions) ([]T, error) {
 	opts := metav1.ListOptions{}
-
-	if options.Source != types.SourceAll {
-		opts.LabelSelector = fmt.Sprintf("%s=%s", common.CloudEventsOriginalSourceLabelKey, options.Source)
-	}
 
 	list, err := l.store.List("", opts)
 	if err != nil {

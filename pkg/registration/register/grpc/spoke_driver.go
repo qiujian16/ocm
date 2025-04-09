@@ -3,6 +3,10 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
+	"time"
+
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -10,9 +14,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"os"
-	"path"
-	"time"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -218,7 +219,7 @@ func (c *GRPCDriver) IsHubKubeConfigValid(ctx context.Context, secretOption regi
 	logger := klog.FromContext(ctx)
 	keyPath := path.Join(secretOption.HubKubeconfigDir, csr.TLSKeyFile)
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		logger.V(4).Info("TLS key file not found", "keyPath", keyPath)
+		logger.V(5).Info("TLS key file not found", "keyPath", keyPath)
 		return false, nil
 	}
 
@@ -262,6 +263,9 @@ func (l leaseStore) GetWatcher(namespace string, opts metav1.ListOptions) (watch
 }
 
 func (l leaseStore) HandleReceivedResource(action types.ResourceAction, resource *coordv1.Lease) error {
+	fmt.Println("--------------------")
+	fmt.Printf("%v, %v\n", action, resource)
+	fmt.Println("--------------------")
 	switch action {
 	case types.Added:
 		newObj, err := utils.ToRuntimeObject(resource)
@@ -327,7 +331,6 @@ func (l leaseStore) HandleReceivedResource(action types.ResourceAction, resource
 	default:
 		return fmt.Errorf("unsupported resource action %s", action)
 	}
-	return nil
 }
 
 func (l leaseStore) Add(resource runtime.Object) error {

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -37,6 +38,7 @@ func (l LeaseService) Get(ctx context.Context, resourceID string) (*cloudevents.
 }
 
 func (l LeaseService) List(listOpts types.ListOptions) ([]*cloudevents.Event, error) {
+	klog.Infof("------lease list----")
 	if len(listOpts.ClusterName) == 0 {
 		return nil, fmt.Errorf("cluster name is empty")
 	}

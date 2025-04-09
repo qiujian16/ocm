@@ -3,6 +3,8 @@ package lease
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	coordinationv1 "k8s.io/api/coordination/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +19,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"strconv"
 )
 
 type LeaseClient struct {
@@ -39,7 +40,7 @@ func (l LeaseClient) Update(ctx context.Context, lease *coordinationv1.Lease, op
 	eventType.Action = common.UpdateRequestAction
 
 	if err := l.cloudEventsClient.Publish(ctx, eventType, lease); err != nil {
-		return nil, cloudeventserrors.NewPublishError(coordinationv1.Resource("leases"), lease.Name, err)
+		return nil, cloudeventserrors.ToStatusError(coordinationv1.Resource("leases"), lease.Name, err)
 	}
 
 	// Fetch the latest cluster from the store and verify the resource version to avoid updating the store

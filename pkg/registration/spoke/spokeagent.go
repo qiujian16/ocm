@@ -263,6 +263,7 @@ func (o *SpokeAgentConfig) RunSpokeAgentWithSpokeInformers(ctx context.Context,
 
 		bootstrapClients, err := o.driver.BuildClients(bootstrapCtx, secretOption, true)
 		if err != nil {
+			stopBootstrap()
 			return err
 		}
 		driverInformer, _ := o.driver.InformerHandler()

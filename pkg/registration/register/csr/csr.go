@@ -261,7 +261,7 @@ func (c *CSRDriver) IsHubKubeConfigValid(ctx context.Context, secretOption regis
 	logger := klog.FromContext(ctx)
 	keyPath := path.Join(secretOption.HubKubeconfigDir, TLSKeyFile)
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		logger.V(4).Info("TLS key file not found", "keyPath", keyPath)
+		logger.V(5).Info("TLS key file not found", "keyPath", keyPath)
 		return false, nil
 	}
 

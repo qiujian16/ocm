@@ -2,7 +2,6 @@ package utils
 
 import (
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/util/keyutil"
 	"k8s.io/klog/v2"
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -39,15 +39,8 @@ func DefaultSignerWithExpiry(caKey, caData []byte, duration time.Duration) agent
 			return nil
 		}
 
-		blockTlsKey, _ := pem.Decode(caKey)
-		if blockTlsKey == nil {
-			klog.Errorf("Failed to decode key")
-			return nil
-		}
-
 		// For now only PKCS#1 is supported which assures the private key algorithm is RSA.
-		// TODO: Compatibility w/ PKCS#8 key e.g. EC algorithm
-		key, err := x509.ParsePKCS1PrivateKey(blockTlsKey.Bytes)
+		key, err := keyutil.ParsePrivateKeyPEM(caKey)
 		if err != nil {
 			klog.Errorf("Failed to parse key: %v", err)
 			return nil
@@ -62,7 +55,7 @@ func DefaultSignerWithExpiry(caKey, caData []byte, duration time.Duration) agent
 	}
 }
 
-func signCSR(csr *certificatesv1.CertificateSigningRequest, caCert *x509.Certificate, caKey *rsa.PrivateKey, duration time.Duration) ([]byte, error) {
+func signCSR(csr *certificatesv1.CertificateSigningRequest, caCert *x509.Certificate, caKey any, duration time.Duration) ([]byte, error) {
 	certExpiryDuration := duration
 	durationUntilExpiry := time.Until(caCert.NotAfter)
 	if durationUntilExpiry <= 0 {

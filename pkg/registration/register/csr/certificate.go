@@ -34,6 +34,10 @@ import (
 // 1) All certs in client certificate are not expired.
 // 2) At least one cert matches the given subject if specified
 func IsCertificateValid(logger klog.Logger, certData []byte, subject *pkix.Name) (bool, error) {
+	if len(certData) == 0 {
+		return false, errors.New("no cert data in certificate")
+	}
+
 	certs, err := certutil.ParseCertsPEM(certData)
 	if err != nil {
 		return false, fmt.Errorf("unable to parse certificate: %v", err)

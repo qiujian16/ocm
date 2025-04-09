@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+
 	eventv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +53,7 @@ func (e EventClient) Create(ctx context.Context, event *eventv1.Event, opts meta
 	// TODO: validate the csr
 
 	if err := e.cloudEventsClient.Publish(ctx, eventType, event); err != nil {
-		return nil, cloudeventserrors.NewPublishError(common.CSRGR, event.Name, err)
+		return nil, cloudeventserrors.ToStatusError(common.CSRGR, event.Name, err)
 	}
 
 	// add the new csr to the local cache.
