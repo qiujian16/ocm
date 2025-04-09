@@ -267,9 +267,6 @@ func (l leaseStore) GetWatcher(namespace string, opts metav1.ListOptions) (watch
 }
 
 func (l leaseStore) HandleReceivedResource(action types.ResourceAction, resource *coordv1.Lease) error {
-	fmt.Println("--------------------")
-	fmt.Printf("%v, %v\n", action, resource)
-	fmt.Println("--------------------")
 	switch action {
 	case types.Added:
 		newObj, err := utils.ToRuntimeObject(resource)
@@ -335,6 +332,7 @@ func (l leaseStore) HandleReceivedResource(action types.ResourceAction, resource
 	default:
 		return fmt.Errorf("unsupported resource action %s", action)
 	}
+	return nil
 }
 
 func (l leaseStore) Add(resource runtime.Object) error {

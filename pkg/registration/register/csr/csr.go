@@ -384,13 +384,12 @@ func NewCSRDriver(opt *Option, secretOpts register.SecretOption) (*CSRDriver, er
 	// 	return nil, errors.New("bootstrap-kubeconfig is required")
 	// }
 
-	driver := &CSRDriver{
-		opt: opt,
-	}
-
 	signer := certificates.KubeAPIServerClientSignerName
 	if secretOpts.Signer != "" {
 		signer = secretOpts.Signer
+	}
+	driver := &CSRDriver{
+		opt: opt,
 	}
 	driver.csrOption = &CSROption{
 		ObjectMeta: metav1.ObjectMeta{
@@ -489,8 +488,8 @@ func hasAdditionalSecretData(additionalSecretData map[string][]byte, secret *cor
 		}
 
 		if !reflect.DeepEqual(v, value) {
-			return fmt.Errorf("key %q in secret %q does not match the expected value, %v, %v",
-				k, secret.Namespace+"/"+secret.Name, v, value)
+			return fmt.Errorf("key %q in secret %q does not match the expected value",
+				k, secret.Namespace+"/"+secret.Name)
 		}
 	}
 	return nil
