@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -379,7 +380,11 @@ func (c *CSRDriver) SetCSRControl(control CSRControl, clusterName string) error 
 var _ register.RegisterDriver = &CSRDriver{}
 var _ register.AddonDriver = &CSRDriver{}
 
-func NewCSRDriver(opt *Option, secretOpts register.SecretOption) *CSRDriver {
+func NewCSRDriver(opt *Option, secretOpts register.SecretOption) (*CSRDriver, error) {
+	if len(secretOpts.BootStrapKubeConfigFile) == 0 {
+		return nil, errors.New("bootstrap-kubeconfig is required")
+	}
+
 	driver := &CSRDriver{
 		opt: opt,
 	}
@@ -426,7 +431,7 @@ func NewCSRDriver(opt *Option, secretOpts register.SecretOption) *CSRDriver {
 		},
 	}
 
-	return driver
+	return driver, nil
 }
 
 func shouldCreateCSR(

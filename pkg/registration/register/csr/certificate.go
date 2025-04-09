@@ -30,7 +30,7 @@ import (
 	"open-cluster-management.io/ocm/pkg/registration/hub/user"
 )
 
-// isCertificateValid return true if
+// IsCertificateValid return true if
 // 1) All certs in client certificate are not expired.
 // 2) At least one cert matches the given subject if specified
 func IsCertificateValid(logger klog.Logger, certData []byte, subject *pkix.Name) (bool, error) {

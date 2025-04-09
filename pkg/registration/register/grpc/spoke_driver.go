@@ -53,12 +53,16 @@ type GRPCDriver struct {
 var _ register.RegisterDriver = &GRPCDriver{}
 var _ register.AddonDriver = &GRPCDriver{}
 
-func NewGRPCDriver(opt *Option, csrOption *csr.Option, secretOption register.SecretOption) register.RegisterDriver {
+func NewGRPCDriver(opt *Option, csrOption *csr.Option, secretOption register.SecretOption) (register.RegisterDriver, error) {
 	secretOption.Signer = signer
-	return &GRPCDriver{
-		csrDriver: csr.NewCSRDriver(csrOption, secretOption),
-		opt:       opt,
+	csrDrvier, err := csr.NewCSRDriver(csrOption, secretOption)
+	if err != nil {
+		return nil, err
 	}
+	return &GRPCDriver{
+		csrDriver: csrDrvier,
+		opt:       opt,
+	}, nil
 }
 
 func (d *GRPCDriver) BuildClients(ctx context.Context, secretOption register.SecretOption, bootstrapped bool) (*register.Clients, error) {

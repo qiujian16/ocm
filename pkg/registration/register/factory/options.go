@@ -44,10 +44,10 @@ func (s *Options) Validate() error {
 	}
 }
 
-func (s *Options) Driver(secretOption register.SecretOption) register.RegisterDriver {
+func (s *Options) Driver(secretOption register.SecretOption) (register.RegisterDriver, error) {
 	switch s.RegistrationAuth {
 	case helpers.AwsIrsaAuthType:
-		return awsirsa.NewAWSIRSADriver(s.AWSISRAOption, secretOption)
+		return awsirsa.NewAWSIRSADriver(s.AWSISRAOption, secretOption), nil
 	case "grpc":
 		return grpc.NewGRPCDriver(s.GRPCOption, s.CSROption, secretOption)
 	default:
