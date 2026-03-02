@@ -1,0 +1,15 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: manifestwork.admission.work.open-cluster-management.io
+  labels:
+    {{ if gt (len .Labels) 0 }}
+    {{ range $key, $value := .Labels }}
+    "{{ $key }}": "{{ $value }}"
+    {{ end }}
+    {{ end }}
+spec:
+  policyName: manifestwork.admission.work.open-cluster-management.io
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector: {}

@@ -25,27 +25,32 @@ import (
 var (
 	namespaceResource = "cluster-manager/cluster-manager-namespace.yaml"
 
-	// The hubRbacResourceFiles should be deployed in the hub cluster.
-	hubRbacResourceFiles = []string{
+	// Core RBAC resources (always deployed)
+	coreRbacResourceFiles = []string{
 		// registration
 		"cluster-manager/hub/registration/clusterrole.yaml",
 		"cluster-manager/hub/registration/clusterrolebinding.yaml",
 		"cluster-manager/hub/registration/serviceaccount.yaml",
-		// registration-webhook
-		"cluster-manager/hub/registration/webhook-clusterrole.yaml",
-		"cluster-manager/hub/registration/webhook-clusterrolebinding.yaml",
-		"cluster-manager/hub/registration/webhook-serviceaccount.yaml",
-		// work-webhook
-		"cluster-manager/hub/work/webhook-clusterrole.yaml",
-		"cluster-manager/hub/work/webhook-clusterrolebinding.yaml",
-		"cluster-manager/hub/work/webhook-serviceaccount.yaml",
 		// work executor admin
 		"cluster-manager/hub/work/executor-admin-clusterrole.yaml",
 		// placement
 		"cluster-manager/hub/placement/clusterrole.yaml",
 		"cluster-manager/hub/placement/clusterrolebinding.yaml",
 		"cluster-manager/hub/placement/serviceaccount.yaml",
-		// addon-webhook
+	}
+
+	// Webhook-specific RBAC resources (only deployed when VAP is disabled)
+	registrationWebhookRbacFiles = []string{
+		"cluster-manager/hub/registration/webhook-clusterrole.yaml",
+		"cluster-manager/hub/registration/webhook-clusterrolebinding.yaml",
+		"cluster-manager/hub/registration/webhook-serviceaccount.yaml",
+	}
+	workWebhookRbacFiles = []string{
+		"cluster-manager/hub/work/webhook-clusterrole.yaml",
+		"cluster-manager/hub/work/webhook-clusterrolebinding.yaml",
+		"cluster-manager/hub/work/webhook-serviceaccount.yaml",
+	}
+	addonWebhookRbacFiles = []string{
 		"cluster-manager/hub/addon-manager/webhook-serviceaccount.yaml",
 	}
 
@@ -121,6 +126,38 @@ func (c *hubReconcile) reconcile(ctx context.Context, cm *operatorapiv1.ClusterM
 		}
 	}
 
+	// Clean up webhook RBAC/services when AdmissionPolicy is enabled
+	if config.RegistrationAPEnabled {
+		_, _, err := cleanResources(ctx, c.hubKubeClient, cm, config, registrationWebhookRbacFiles...)
+		if err != nil {
+			return cm, reconcileStop, err
+		}
+		// Clean up webhook service files
+		if helpers.IsHosted(cm.Spec.DeployOption.Mode) {
+			cleanResources(ctx, c.hubKubeClient, cm, config, "cluster-manager/hub/registration/webhook-service-hosted.yaml")
+			if config.RegistrationWebhook.HostedIsIPFormat {
+				cleanResources(ctx, c.hubKubeClient, cm, config, hubHostedWebhookEndpointRegistration)
+			}
+		} else {
+			cleanResources(ctx, c.hubKubeClient, cm, config, "cluster-manager/hub/registration/webhook-service.yaml")
+		}
+	}
+	if config.WorkAPEnabled {
+		_, _, err := cleanResources(ctx, c.hubKubeClient, cm, config, workWebhookRbacFiles...)
+		if err != nil {
+			return cm, reconcileStop, err
+		}
+		// Clean up webhook service files
+		if helpers.IsHosted(cm.Spec.DeployOption.Mode) {
+			cleanResources(ctx, c.hubKubeClient, cm, config, "cluster-manager/hub/work/webhook-service-hosted.yaml")
+			if config.WorkWebhook.HostedIsIPFormat {
+				cleanResources(ctx, c.hubKubeClient, cm, config, hubHostedWebhookEndpointWork)
+			}
+		} else {
+			cleanResources(ctx, c.hubKubeClient, cm, config, "cluster-manager/hub/work/webhook-service.yaml")
+		}
+	}
+
 	hubResources := getHubResources(cm.Spec.DeployOption.Mode, config)
 	var appliedErrs []error
 
@@ -168,9 +205,21 @@ func (c *hubReconcile) clean(ctx context.Context, cm *operatorapiv1.ClusterManag
 
 func getHubResources(mode operatorapiv1.InstallMode, config manifests.HubConfig) []string {
 	hubResources := []string{namespaceResource}
-	hubResources = append(hubResources, hubRbacResourceFiles...)
+	// Add core RBAC resources
+	hubResources = append(hubResources, coreRbacResourceFiles...)
+
+	// All-or-nothing: Add webhook RBAC ONLY if AdmissionPolicy disabled
+	if !config.RegistrationAPEnabled {
+		hubResources = append(hubResources, registrationWebhookRbacFiles...)
+	}
+	if !config.WorkAPEnabled {
+		hubResources = append(hubResources, workWebhookRbacFiles...)
+	}
+
 	if config.AddOnManagerEnabled {
 		hubResources = append(hubResources, hubAddOnManagerRbacResourceFiles...)
+		// Addon webhook (no VAP equivalent yet)
+		hubResources = append(hubResources, addonWebhookRbacFiles...)
 	}
 
 	if config.WorkControllerEnabled {
@@ -181,18 +230,40 @@ func getHubResources(mode operatorapiv1.InstallMode, config manifests.HubConfig)
 		hubResources = append(hubResources, grpcServerResourceFiles...)
 	}
 
+	// Add webhook services
 	// the hubHostedWebhookServiceFiles are only used in hosted mode
 	// Note: addon conversion webhook is not supported in hosted mode
+
+	// All-or-nothing: Services only if AdmissionPolicy disabled
+	needRegistrationWebhook := !config.RegistrationAPEnabled
+	needWorkWebhook := !config.WorkAPEnabled
+	needAddonWebhook := config.AddOnManagerEnabled
+
 	if helpers.IsHosted(mode) {
-		hubResources = append(hubResources, hubHostedWebhookServiceFiles...)
-		if config.RegistrationWebhook.HostedIsIPFormat {
+		if needRegistrationWebhook && config.RegistrationWebhook.HostedIsIPFormat {
 			hubResources = append(hubResources, hubHostedWebhookEndpointRegistration)
 		}
-		if config.WorkWebhook.HostedIsIPFormat {
+		if needWorkWebhook && config.WorkWebhook.HostedIsIPFormat {
 			hubResources = append(hubResources, hubHostedWebhookEndpointWork)
 		}
+		// Add hosted webhook services
+		if needRegistrationWebhook {
+			hubResources = append(hubResources, "cluster-manager/hub/registration/webhook-service-hosted.yaml")
+		}
+		if needWorkWebhook {
+			hubResources = append(hubResources, "cluster-manager/hub/work/webhook-service-hosted.yaml")
+		}
 	} else {
-		hubResources = append(hubResources, hubDefaultWebhookServiceFiles...)
+		// Default mode - add services for components that need webhooks
+		if needRegistrationWebhook {
+			hubResources = append(hubResources, "cluster-manager/hub/registration/webhook-service.yaml")
+		}
+		if needWorkWebhook {
+			hubResources = append(hubResources, "cluster-manager/hub/work/webhook-service.yaml")
+		}
+		if needAddonWebhook {
+			hubResources = append(hubResources, "cluster-manager/hub/addon-manager/webhook-service.yaml")
+		}
 	}
 
 	return hubResources

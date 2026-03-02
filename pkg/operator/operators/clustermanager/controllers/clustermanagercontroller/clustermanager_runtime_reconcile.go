@@ -25,12 +25,20 @@ import (
 )
 
 var (
-	// All deployments should be deployed in the management cluster.
-	deploymentFiles = []string{
+	// Core deployments (always deployed)
+	coreDeploymentFiles = []string{
 		"cluster-manager/management/registration/deployment.yaml",
-		"cluster-manager/management/registration/webhook-deployment.yaml",
-		"cluster-manager/management/work/webhook-deployment.yaml",
 		"cluster-manager/management/placement/deployment.yaml",
+	}
+
+	// Webhook deployments (only deployed when VAP is disabled)
+	registrationWebhookDeploymentFiles = []string{
+		"cluster-manager/management/registration/webhook-deployment.yaml",
+	}
+	workWebhookDeploymentFiles = []string{
+		"cluster-manager/management/work/webhook-deployment.yaml",
+	}
+	addonWebhookDeploymentFiles = []string{
 		"cluster-manager/management/addon-manager/webhook-deployment.yaml",
 	}
 
@@ -165,10 +173,38 @@ func (c *runtimeReconcile) reconcile(ctx context.Context, cm *operatorapiv1.Clus
 	}
 
 	var progressingDeployments []string
-	deployResources := deploymentFiles
+	// Start with core deployments
+	deployResources := coreDeploymentFiles
+
+	// All-or-nothing approach:
+	// Registration webhook: Deploy ONLY if AdmissionPolicy disabled
+	if !config.RegistrationAPEnabled {
+		deployResources = append(deployResources, registrationWebhookDeploymentFiles...)
+	} else {
+		// Clean up webhook deployment when AdmissionPolicy enabled
+		_, _, err := cleanResources(ctx, c.kubeClient, cm, config, registrationWebhookDeploymentFiles...)
+		if err != nil {
+			appliedErrs = append(appliedErrs, err)
+		}
+	}
+
+	// Work webhook: Deploy ONLY if AdmissionPolicy disabled
+	if !config.WorkAPEnabled {
+		deployResources = append(deployResources, workWebhookDeploymentFiles...)
+	} else {
+		// Clean up webhook deployment when AdmissionPolicy enabled
+		_, _, err := cleanResources(ctx, c.kubeClient, cm, config, workWebhookDeploymentFiles...)
+		if err != nil {
+			appliedErrs = append(appliedErrs, err)
+		}
+	}
+
+	// Add addon webhook (no VAP equivalent yet, so always deploy if addon is enabled)
 	if config.AddOnManagerEnabled {
+		deployResources = append(deployResources, addonWebhookDeploymentFiles...)
 		deployResources = append(deployResources, addOnManagerDeploymentFiles...)
 	}
+
 	if config.WorkControllerEnabled {
 		deployResources = append(deployResources, workControllerDeploymentFiles...)
 	}

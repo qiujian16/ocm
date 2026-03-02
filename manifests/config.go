@@ -49,6 +49,9 @@ type HubConfig struct {
 	GRPCServerImage                   string
 	GRPCAutoApprovedUsers             string
 	GRPCEndpointType                  string
+	// AdmissionPolicy feature flags (enables both VAP and MAP)
+	RegistrationAPEnabled             bool
+	WorkAPEnabled                     bool
 }
 
 type Webhook struct {

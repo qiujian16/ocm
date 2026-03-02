@@ -3,6 +3,7 @@ package webhook
 import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/klog/v2"
 
 	ocmfeature "open-cluster-management.io/api/feature"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -16,6 +17,13 @@ import (
 )
 
 func (c *Options) SetupWebhookServer(opts *commonoptions.WebhookOptions) error {
+	// When AdmissionPolicy feature is enabled, skip webhook registration entirely
+	// The cluster manager controller will deploy ValidatingAdmissionPolicy resources instead
+	if features.HubMutableFeatureGate.Enabled(ocmfeature.AdmissionPolicy) {
+		klog.Info("AdmissionPolicy feature enabled, skipping work webhook registration")
+		return nil
+	}
+
 	common.ManifestValidator.WithLimit(c.ManifestLimit)
 	if err := opts.InstallScheme(
 		clientgoscheme.AddToScheme,

@@ -1,0 +1,38 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: managedclustersetbinding.admission.cluster.open-cluster-management.io
+  labels:
+    {{ if gt (len .Labels) 0 }}
+    {{ range $key, $value := .Labels }}
+    "{{ $key }}": "{{ $value }}"
+    {{ end }}
+    {{ end }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["cluster.open-cluster-management.io"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["managedclustersetbindings"]
+
+  validations:
+  # 1. Validate that binding name matches the target clusterset name
+  - expression: "object.metadata.name == object.spec.clusterSet"
+    message: "The ManagedClusterSetBinding must have the same name as the target ManagedClusterSet"
+    reason: Invalid
+
+  # 2. RBAC check for binding to clusterset (only on CREATE)
+  # User must have permission to create on managedclustersets/bind subresource
+  - expression: |
+      has(oldObject) ||
+      authorizer.group('cluster.open-cluster-management.io').
+        resource('managedclustersets').
+        subresource('bind').
+        name(object.spec.clusterSet).
+        check('create').allowed()
+    message: "user does not have permission to bind to the ManagedClusterSet"
+    reason: Forbidden
+    messageExpression: |
+      'user is not allowed to bind cluster set ' + object.spec.clusterSet

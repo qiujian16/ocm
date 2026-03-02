@@ -1,0 +1,85 @@
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: managedcluster.admission.cluster.open-cluster-management.io
+  labels:
+    {{ if gt (len .Labels) 0 }}
+    {{ range $key, $value := .Labels }}
+    "{{ $key }}": "{{ $value }}"
+    {{ end }}
+    {{ end }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["cluster.open-cluster-management.io"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["managedclusters"]
+
+  variables:
+  # Current timestamp in RFC3339 format for setting timeAdded
+  - name: now
+    expression: "time.Now().format(time.RFC3339)"
+
+  # Check if this is a CREATE operation
+  - name: isCreate
+    expression: "!has(oldObject)"
+
+  # Check if default clusterset label is needed
+  # Note: Assumes DefaultClusterSet feature is enabled when AdmissionPolicy is enabled
+  - name: needsDefaultClusterSet
+    expression: |
+      !has(object.metadata.labels) ||
+      !has(object.metadata.labels['cluster.open-cluster-management.io/clusterset']) ||
+      object.metadata.labels['cluster.open-cluster-management.io/clusterset'] == ''
+
+  mutations:
+  # Mutation 1: Set timeAdded for taints
+  # This handles both CREATE and UPDATE operations
+  # - On CREATE: All taints get current timestamp
+  # - On UPDATE: New/modified taints get current timestamp, unchanged taints preserve original
+  - patchType: ApplyConfiguration
+    condition: "has(object.spec.taints) && size(object.spec.taints) > 0"
+    applyConfiguration:
+      expression: |
+        Object{
+          spec: Object.spec{
+            taints: object.spec.taints.map(i, taint,
+              // Check if this is CREATE or if taint is new/modified
+              variables.isCreate || !has(oldObject.spec.taints) ?
+                // CREATE or no old taints - set current time
+                Object.spec.taints[i]{
+                  timeAdded: variables.now
+                } :
+                // UPDATE - check if taint exists in old object with same key/value/effect
+                oldObject.spec.taints.exists(old,
+                  old.key == taint.key &&
+                  old.value == taint.value &&
+                  old.effect == taint.effect
+                ) ?
+                  // Unchanged taint - preserve original timeAdded
+                  Object.spec.taints[i]{
+                    timeAdded: oldObject.spec.taints.filter(old, old.key == taint.key)[0].timeAdded
+                  } :
+                  // New or modified taint - set current time
+                  Object.spec.taints[i]{
+                    timeAdded: variables.now
+                  }
+            )
+          }
+        }
+
+  # Mutation 2: Add default clusterset label
+  # Only applies when no clusterset label exists or it's empty
+  - patchType: ApplyConfiguration
+    condition: "variables.needsDefaultClusterSet"
+    applyConfiguration:
+      expression: |
+        Object{
+          metadata: Object.metadata{
+            labels: (has(object.metadata.labels) ? object.metadata.labels : {}) + {
+              'cluster.open-cluster-management.io/clusterset': 'default'
+            }
+          }
+        }

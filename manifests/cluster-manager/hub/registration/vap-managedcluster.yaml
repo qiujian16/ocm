@@ -1,0 +1,111 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: managedcluster.admission.cluster.open-cluster-management.io
+  labels:
+    {{ if gt (len .Labels) 0 }}
+    {{ range $key, $value := .Labels }}
+    "{{ $key }}": "{{ $value }}"
+    {{ end }}
+    {{ end }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["cluster.open-cluster-management.io"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["managedclusters"]
+
+  variables:
+  # Check if HubAcceptsClient is being set to true
+  - name: hubAcceptsClientEnabled
+    expression: |
+      has(object.spec.hubAcceptsClient) && object.spec.hubAcceptsClient
+
+  # Check if HubAcceptsClient changed from false to true
+  - name: hubAcceptsClientChanged
+    expression: |
+      has(object.spec.hubAcceptsClient) && object.spec.hubAcceptsClient &&
+      (!has(oldObject) || !has(oldObject.spec.hubAcceptsClient) || !oldObject.spec.hubAcceptsClient)
+
+  # Get old clusterset label value
+  - name: oldClusterSet
+    expression: |
+      has(oldObject) && has(oldObject.metadata.labels) && has(oldObject.metadata.labels['cluster.open-cluster-management.io/clusterset']) ?
+        oldObject.metadata.labels['cluster.open-cluster-management.io/clusterset'] : ''
+
+  # Get new clusterset label value
+  - name: newClusterSet
+    expression: |
+      has(object.metadata.labels) && has(object.metadata.labels['cluster.open-cluster-management.io/clusterset']) ?
+        object.metadata.labels['cluster.open-cluster-management.io/clusterset'] : ''
+
+  # Check if clusterset label changed
+  - name: clusterSetChanged
+    expression: |
+      variables.oldClusterSet != variables.newClusterSet
+
+  validations:
+  # 1. Validate cluster name format (DNS subdomain)
+  # The name must be a valid DNS subdomain (lowercase alphanumeric, '-', '.')
+  # Max 253 characters, must start and end with alphanumeric
+  - expression: |
+      size(object.metadata.name) <= 253 &&
+      object.metadata.name.matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$')
+    message: "metadata.name format is not correct: must be a valid DNS subdomain"
+    reason: Invalid
+
+  # 2. Validate HTTPS URLs in client configs
+  # All URLs in ManagedClusterClientConfigs must use HTTPS
+  - expression: |
+      !has(object.spec.managedClusterClientConfigs) ||
+      object.spec.managedClusterClientConfigs.all(config,
+        has(config.url) && config.url.startsWith('https://')
+      )
+    message: "all URLs in client configs must use HTTPS protocol"
+    reason: Invalid
+
+  # 3. RBAC check for HubAcceptsClient field
+  # When setting hubAcceptsClient to true, user must have permission to update managedclusters/accept
+  # Note: We cannot check if namespace is terminating in CEL (no cross-resource reads)
+  # This validation is skipped on updates where the field was already true
+  - expression: |
+      !variables.hubAcceptsClientChanged ||
+      authorizer.group('register.open-cluster-management.io').
+        resource('managedclusters').
+        subresource('accept').
+        name(object.metadata.name).
+        check('update').allowed()
+    message: "user does not have permission to update the HubAcceptsClient field"
+    reason: Forbidden
+    messageExpression: |
+      'user cannot update the HubAcceptsClient field for ManagedCluster ' + object.metadata.name
+
+  # 4. RBAC check for removing clusterset label
+  # When removing a clusterset label, user must have permission to join the old clusterset
+  - expression: |
+      !variables.clusterSetChanged || variables.oldClusterSet == '' ||
+      authorizer.group('cluster.open-cluster-management.io').
+        resource('managedclustersets').
+        subresource('join').
+        name(variables.oldClusterSet).
+        check('create').allowed()
+    message: "user does not have permission to remove cluster from the ManagedClusterSet"
+    reason: Forbidden
+    messageExpression: |
+      'user cannot remove ManagedCluster from ManagedClusterSet ' + variables.oldClusterSet
+
+  # 5. RBAC check for adding clusterset label
+  # When adding a clusterset label, user must have permission to join the new clusterset
+  - expression: |
+      !variables.clusterSetChanged || variables.newClusterSet == '' ||
+      authorizer.group('cluster.open-cluster-management.io').
+        resource('managedclustersets').
+        subresource('join').
+        name(variables.newClusterSet).
+        check('create').allowed()
+    message: "user does not have permission to add cluster to the ManagedClusterSet"
+    reason: Forbidden
+    messageExpression: |
+      'user cannot add ManagedCluster to ManagedClusterSet ' + variables.newClusterSet

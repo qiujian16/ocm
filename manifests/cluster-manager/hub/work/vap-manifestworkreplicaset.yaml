@@ -1,0 +1,68 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: manifestworkreplicaset.admission.work.open-cluster-management.io
+  labels:
+    {{ if gt (len .Labels) 0 }}
+    {{ range $key, $value := .Labels }}
+    "{{ $key }}": "{{ $value }}"
+    {{ end }}
+    {{ end }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["work.open-cluster-management.io"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["manifestworkreplicasets"]
+
+  variables:
+  # Calculate total size of all manifests in the template
+  - name: totalSize
+    expression: |
+      object.spec.manifestWorkTemplate.workload.manifests.map(m, size(string(m))).sum()
+
+  # Extract manifest keys for duplicate detection
+  - name: manifestKeys
+    expression: |
+      object.spec.manifestWorkTemplate.workload.manifests.map(m,
+        string(has(m.apiVersion) ? m.apiVersion : 'v1') + '/' +
+        string(has(m.kind) ? m.kind : '') + '/' +
+        string(has(m.metadata.namespace) ? m.metadata.namespace : '') + '/' +
+        string(m.metadata.name)
+      )
+
+  validations:
+  # 1. Manifests must not be empty
+  - expression: "size(object.spec.manifestWorkTemplate.workload.manifests) > 0"
+    message: "manifests should not be empty"
+    reason: Invalid
+
+  # 2. Total size must not exceed 500KB (512000 bytes)
+  - expression: "variables.totalSize <= 512000"
+    message: "the size of manifests exceeds the 512000 byte limit"
+    reason: Invalid
+    messageExpression: |
+      'the size of manifests is ' + string(variables.totalSize) + ' bytes which exceeds the 512000 limit'
+
+  # 3. Each manifest must have metadata.name set
+  - expression: |
+      object.spec.manifestWorkTemplate.workload.manifests.all(m,
+        has(m.metadata) && has(m.metadata.name) && m.metadata.name != ''
+      )
+    message: "name must be set in manifest"
+    reason: Invalid
+
+  # 4. No manifest should have generateName set
+  - expression: |
+      object.spec.manifestWorkTemplate.workload.manifests.all(m,
+        !has(m.metadata) || !has(m.metadata.generateName) || m.metadata.generateName == ''
+      )
+    message: "generateName must not be set in manifest"
+    reason: Invalid
+
+  # 5. No duplicate manifests (check if unique keys match total count)
+  - expression: "size(variables.manifestKeys) == size(variables.manifestKeys.unique())"
+    message: "duplicate manifests detected"
+    reason: Invalid

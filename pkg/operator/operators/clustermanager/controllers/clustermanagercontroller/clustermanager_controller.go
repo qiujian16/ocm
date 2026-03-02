@@ -190,6 +190,7 @@ func (n *clusterManagerController) sync(ctx context.Context, controllerContext f
 	config.RegistrationFeatureGates, registrationFeatureMsgs = helpers.ConvertToFeatureGateFlags("Registration",
 		registrationFeatureGates, ocmfeature.DefaultHubRegistrationFeatureGates)
 	config.ClusterProfileEnabled = helpers.FeatureGateEnabled(registrationFeatureGates, ocmfeature.DefaultHubRegistrationFeatureGates, ocmfeature.ClusterProfile)
+	config.RegistrationAPEnabled = helpers.FeatureGateEnabled(registrationFeatureGates, ocmfeature.DefaultHubRegistrationFeatureGates, ocmfeature.AdmissionPolicy)
 	// setting for cluster importer.
 	// TODO(qiujian16) since this is disabled by feature gate, the image is obtained from cluster manager's env var. Need a more elegant approach.
 	config.ClusterImporterEnabled = helpers.FeatureGateEnabled(registrationFeatureGates, ocmfeature.DefaultHubRegistrationFeatureGates, ocmfeature.ClusterImporter)
@@ -209,6 +210,7 @@ func (n *clusterManagerController) sync(ctx context.Context, controllerContext f
 	config.WorkControllerEnabled = helpers.FeatureGateEnabled(workFeatureGates, ocmfeature.DefaultHubWorkFeatureGates, ocmfeature.ManifestWorkReplicaSet) ||
 		helpers.FeatureGateEnabled(workFeatureGates, ocmfeature.DefaultHubWorkFeatureGates, ocmfeature.CleanUpCompletedManifestWork)
 	config.CloudEventsDriverEnabled = helpers.FeatureGateEnabled(workFeatureGates, ocmfeature.DefaultHubWorkFeatureGates, ocmfeature.CloudEventsDrivers)
+	config.WorkAPEnabled = helpers.FeatureGateEnabled(workFeatureGates, ocmfeature.DefaultHubWorkFeatureGates, ocmfeature.AdmissionPolicy)
 
 	var addonFeatureGates []operatorapiv1.FeatureGate
 	if clusterManager.Spec.AddOnManagerConfiguration != nil {
